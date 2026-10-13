@@ -25,7 +25,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Scan types, magic bytes, hashes | Done (0.0.1) |
-| 0 | Report types matching MobSF JSON keys, safe archive extraction, regex compatibility layer (`regex` then `fancy-regex`), golden-diff harness | Next |
+| 0 | Safe archive reader (`msec::archive`) | Done |
+| 0 | Report types matching MobSF JSON keys, regex compatibility layer (`regex` then `fancy-regex`), golden-diff harness | Next |
 | 1 | AXML + ARSC decoder; manifest data and permission database; manifest analysis; network security config; certificate and signature analysis; ELF checks | Planned |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
@@ -47,4 +48,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 
 | # | Upstream behaviour | msec behaviour |
 |---|---|---|
-| — | none yet | — |
+| 1 | Extracts packages to disk with Python's `zipfile` | Never extracts: entries are read by name into memory, so entry names cannot write anywhere (`msec::archive`) |
+| 2 | No limits beyond the upload size | Archive size, entry count, central directory size, per-entry output, total output and compression ratio are bounded ([`Limits`](../src/archive/limits.rs)); declared sizes are never trusted |
+| 3 | Duplicate entry names: the last one wins (`zipfile`) | The first one wins, as on Android, and `DuplicateName` is reported |
+| 4 | Structural tricks pass silently (prepended data, fake encryption flag, local header mismatches, overlapping entries, hidden data, second end record in the comment) | Each is reported as an `Anomaly`, marked when Android itself rejects it; the package is still analysed |
+| 5 | CRC and size of extracted data are checked by `zipfile` and fail the extraction | A mismatch is reported as an anomaly and the data is still returned for analysis |

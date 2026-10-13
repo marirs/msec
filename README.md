@@ -33,7 +33,7 @@ IPA, DYLIB, A. APPX is recognised but not analysed.
 
 Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed corpus:
 
-1. Foundation: report types matching MobSF's JSON report keys, safe archive extraction, a
+1. Foundation: a safe archive reader (done), report types matching MobSF's JSON report keys, a
    rule-engine regex compatibility layer.
 2. Android without a decompiler: binary XML and resource table decoding, manifest data and
    permissions, manifest analysis, network security config, certificate and signature analysis,

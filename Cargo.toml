@@ -12,9 +12,17 @@ categories = ["development-tools", "parser-implementations"]
 exclude = [".github/"]
 
 [dependencies]
+crc32fast = "1.5.2"
+flate2 = "1.1.10"
 md-5 = "0.11.0"
 sha1 = "0.11.0"
 sha2 = "0.11.1"
+
+[dev-dependencies]
+# Independent writer for cross-checking the reader; pure-Rust deflate only.
+crc32fast = "1.5.2"
+flate2 = "1.1.10"
+zip = { version = "9.0.2", default-features = false, features = ["deflate-flate2"] }
 
 [lints.rust]
 unsafe_code = "forbid"
