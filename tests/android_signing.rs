@@ -124,7 +124,7 @@ fn platform_verdicts_follow_android_scheme_selection() {
     use msec::android::signing::SchemeUsed;
     let summary = |report: &SigningReport, min_sdk| {
         report
-            .platform_verdicts(min_sdk)
+            .platform_verdicts(min_sdk, 29)
             .iter()
             .map(|verdict| (verdict.from_api, verdict.scheme, verdict.accepted()))
             .collect::<Vec<_>>()
@@ -136,6 +136,7 @@ fn platform_verdicts_follow_android_scheme_selection() {
             (21, Some(SchemeUsed::V1), true),
             (24, Some(SchemeUsed::V2), true),
             (28, Some(SchemeUsed::V2), true),
+            (30, Some(SchemeUsed::V2), true),
             (33, Some(SchemeUsed::V2), true),
         ]
     );
@@ -147,6 +148,7 @@ fn platform_verdicts_follow_android_scheme_selection() {
             (21, Some(SchemeUsed::V1), true),
             (24, Some(SchemeUsed::V2), false),
             (28, Some(SchemeUsed::V2), false),
+            (30, Some(SchemeUsed::V2), false),
             (33, Some(SchemeUsed::V2), false),
         ]
     );
@@ -157,9 +159,21 @@ fn platform_verdicts_follow_android_scheme_selection() {
         summary(&ec, 28),
         [
             (28, Some(SchemeUsed::V3), true),
+            (30, Some(SchemeUsed::V3), true),
             (33, Some(SchemeUsed::V3), true)
         ]
     );
+    // v1 only: fine up to Android 10; Android 11+ refuse it when the app targets API 30+.
+    let legacy = report(fixture!("signed-v1-legacy"));
+    let accepted = |target| {
+        legacy
+            .platform_verdicts(24, target)
+            .iter()
+            .map(|verdict| verdict.accepted())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(accepted(29), [true, true, true, true]);
+    assert_eq!(accepted(30), [true, true, false, false]);
 }
 
 #[test]
@@ -169,11 +183,11 @@ fn a_stripped_v3_signature_is_detected() {
     assert!(report.v3_stripped());
     // Android 7.0-8.1 accept the v2 signature; Android 9+ see the stripping and reject.
     let accepted: Vec<bool> = report
-        .platform_verdicts(24)
+        .platform_verdicts(24, 35)
         .iter()
         .map(|verdict| verdict.accepted())
         .collect();
-    assert_eq!(accepted, [true, false, false]);
+    assert_eq!(accepted, [true, false, false, false]);
 }
 
 #[test]
@@ -258,7 +272,7 @@ fn any_changed_byte_fails_verification() {
         if let Ok(mut archive) = ZipArchive::open(Cursor::new(mutated), Limits::default()) {
             let report = SigningReport::read(&mut archive);
             let every_release_accepts = report
-                .platform_verdicts(24)
+                .platform_verdicts(24, 35)
                 .iter()
                 .all(|verdict| verdict.accepted());
             assert!(
@@ -320,10 +334,7 @@ fn signing_findings_per_fixture() {
         findings(fixture!("signed-v3-stripped")),
         rows(&[
             ("signed_application", "v2"),
-            (
-                "msec_signature_rejected_on_some_releases",
-                "API 28-32, API 33+"
-            )
+            ("msec_signature_rejected_on_some_releases", "API 28+")
         ])
     );
     assert_eq!(

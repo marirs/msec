@@ -142,42 +142,42 @@ impl SigningReport {
     }
 
     /// Which signature each Android release range checks, for an app installable from
-    /// `min_sdk`, and whether it verifies. Android below 7.0 checks v1; 7.0–8.1 check v2, else
-    /// v1; 9–12L check v3, else v2, else v1; 13+ check v3.1, else the same chain. A present but
-    /// broken signature is not skipped: Android rejects the APK rather than fall back. Stripped
-    /// stronger signatures (declared by the weaker one, then missing) are rejected too.
-    pub fn platform_verdicts(&self, min_sdk: u32) -> Vec<PlatformVerdict> {
-        let ranges: [(u32, Option<u32>, &[SchemeUsed]); 4] = [
-            (1, Some(23), &[SchemeUsed::V1]),
-            (24, Some(27), &[SchemeUsed::V2, SchemeUsed::V1]),
-            (
-                28,
-                Some(32),
-                &[SchemeUsed::V3, SchemeUsed::V2, SchemeUsed::V1],
-            ),
-            (
-                33,
-                None,
-                &[
-                    SchemeUsed::V31,
-                    SchemeUsed::V3,
-                    SchemeUsed::V2,
-                    SchemeUsed::V1,
-                ],
-            ),
+    /// `min_sdk` and targeting `target_sdk`, and whether Android accepts it there. Android below
+    /// 7.0 checks v1; 7.0–8.1 check v2, else v1; 9–12L check v3, else v2, else v1; 13+ check
+    /// v3.1, else the same chain. A present but broken signature is not skipped: Android rejects
+    /// the APK rather than fall back. Stripped stronger signatures (declared by the weaker one,
+    /// then missing) are rejected, and Android 11+ rejects v1-only APKs targeting API 30+.
+    pub fn platform_verdicts(&self, min_sdk: u32, target_sdk: u32) -> Vec<PlatformVerdict> {
+        use SchemeUsed::{V1, V2, V3, V31};
+        let ranges: [(u32, Option<u32>, &[SchemeUsed]); 5] = [
+            (1, Some(23), &[V1]),
+            (24, Some(27), &[V2, V1]),
+            (28, Some(29), &[V3, V2, V1]),
+            (30, Some(32), &[V3, V2, V1]),
+            (33, None, &[V31, V3, V2, V1]),
         ];
         ranges
             .into_iter()
             .filter(|(_, to, _)| to.is_none_or(|to| to >= min_sdk))
             .map(|(from, to, order)| {
                 let scheme = order.iter().copied().find(|scheme| self.has(*scheme));
+                let rejection = match scheme {
+                    None => Some(Rejection::NoSignature),
+                    Some(scheme) if !self.scheme_verified(scheme) => Some(Rejection::DoesNotVerify),
+                    Some(scheme) if self.stripped_for(scheme, from) => Some(Rejection::Stripped),
+                    Some(SchemeUsed::V1)
+                        if from >= V2_REQUIRED_FOR_TARGET
+                            && target_sdk >= V2_REQUIRED_FOR_TARGET =>
+                    {
+                        Some(Rejection::V1NotEnoughForTarget)
+                    }
+                    Some(_) => None,
+                };
                 PlatformVerdict {
                     from_api: from.max(min_sdk),
                     to_api: to,
                     scheme,
-                    verified: scheme.is_some_and(|scheme| {
-                        self.scheme_verified(scheme) && !self.stripped_for(scheme, from)
-                    }),
+                    rejection,
                 }
             })
             .collect()
@@ -248,6 +248,22 @@ impl SchemeUsed {
     }
 }
 
+/// Android 11: apps targeting it (API 30) need a v2 or later signature.
+const V2_REQUIRED_FOR_TARGET: u32 = 30;
+
+/// Why Android in a release range refuses the APK.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Rejection {
+    /// No signature this range can check.
+    NoSignature,
+    /// The signature it checks does not verify.
+    DoesNotVerify,
+    /// The signature it checks declares a stronger one that is missing.
+    Stripped,
+    /// Only v1, and the app targets Android 11 or later.
+    V1NotEnoughForTarget,
+}
+
 /// What one range of Android releases checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlatformVerdict {
@@ -255,16 +271,16 @@ pub struct PlatformVerdict {
     pub from_api: u32,
     /// Last API level, `None` for "and later".
     pub to_api: Option<u32>,
-    /// The scheme Android checks there; `None`: no signature it can use (it rejects the APK).
+    /// The scheme Android checks there; `None` when it has none to check.
     pub scheme: Option<SchemeUsed>,
-    /// That scheme verifies.
-    pub verified: bool,
+    /// Why Android refuses the APK there; `None` when it accepts it.
+    pub rejection: Option<Rejection>,
 }
 
 impl PlatformVerdict {
     /// Android in this range installs the APK.
     pub fn accepted(&self) -> bool {
-        self.scheme.is_some() && self.verified
+        self.rejection.is_none()
     }
 }
 

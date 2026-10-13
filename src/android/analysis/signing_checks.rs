@@ -2,8 +2,8 @@
 //! it does not verify signatures.
 
 use super::{Origin, Severity};
-use crate::android::signing::SigningReport;
 use crate::android::signing::crypto::Hash;
+use crate::android::signing::{Rejection, SigningReport};
 
 /// Janus (CVE-2017-13156) affects Android 5.0-8.0; the fix shipped with Android 8.1.
 const JANUS_FIXED_IN: u32 = 27;
@@ -128,7 +128,7 @@ pub fn analyse_signing(
         Some(schemes_present(report)),
     );
     janus(report, min_sdk, &mut add);
-    verification(report, min_sdk, &mut add);
+    verification(report, min_sdk, target_sdk, &mut add);
     for certificate in report.certificates() {
         if certificate.is_debug() {
             add(
@@ -210,6 +210,7 @@ fn janus(report: &SigningReport, min_sdk: u32, add: &mut impl FnMut(SigningRule,
 fn verification(
     report: &SigningReport,
     min_sdk: u32,
+    target_sdk: u32,
     add: &mut impl FnMut(SigningRule, Option<String>),
 ) {
     let mut broken: Vec<&str> = Vec::new();
@@ -225,19 +226,42 @@ fn verification(
     if !broken.is_empty() {
         add(SigningRule::SignatureInvalid, Some(broken.join(", ")));
     }
-    let rejected: Vec<String> = report
-        .platform_verdicts(min_sdk)
-        .iter()
-        .filter(|verdict| !verdict.accepted())
-        .map(|verdict| match verdict.to_api {
-            Some(to) => format!("API {}-{to}", verdict.from_api),
-            None => format!("API {}+", verdict.from_api),
-        })
-        .collect();
+    // Broken signatures and v1-only targeting Android 11+ have their own rules; this one is
+    // for releases left without a usable signature or seeing a stripped one.
+    let rejected = merged_ranges(
+        report
+            .platform_verdicts(min_sdk, target_sdk)
+            .iter()
+            .filter(|verdict| {
+                matches!(
+                    verdict.rejection,
+                    Some(Rejection::NoSignature | Rejection::Stripped)
+                )
+            })
+            .map(|verdict| (verdict.from_api, verdict.to_api)),
+    );
     if !rejected.is_empty() && broken.is_empty() {
         add(
             SigningRule::RejectedOnSomeReleases,
             Some(rejected.join(", ")),
         );
     }
+}
+
+/// Adjacent API ranges joined: `28-29` and `30+` read `API 28+`.
+fn merged_ranges(ranges: impl Iterator<Item = (u32, Option<u32>)>) -> Vec<String> {
+    let mut merged: Vec<(u32, Option<u32>)> = Vec::new();
+    for (from, to) in ranges {
+        match merged.last_mut() {
+            Some((_, end)) if end.is_some_and(|end| end + 1 == from) => *end = to,
+            _ => merged.push((from, to)),
+        }
+    }
+    merged
+        .into_iter()
+        .map(|(from, to)| match to {
+            Some(to) => format!("API {from}-{to}"),
+            None => format!("API {from}+"),
+        })
+        .collect()
 }
