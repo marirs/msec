@@ -1,0 +1,21 @@
+[package]
+name = "msec"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.88"
+description = "Mobile app security analysis core for Android and iOS packages: a Rust port of the MobSF analysis engine (early development)"
+license = "GPL-3.0-only"
+repository = "https://github.com/marirs/msec"
+readme = "README.md"
+keywords = ["security", "android", "ios", "mobsf", "sast"]
+categories = ["development-tools", "parser-implementations"]
+exclude = [".github/"]
+
+[dependencies]
+md-5 = "0.11.0"
+sha1 = "0.11.0"
+sha2 = "0.11.1"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

@@ -1,0 +1,13 @@
+msec
+Copyright (C) 2026 Sriram G and msec contributors
+
+msec is a Rust port of the analysis engine of MobSF (Mobile Security Framework),
+https://github.com/MobSF/Mobile-Security-Framework-MobSF, version 4.5.3.
+MobSF is Copyright (C) Ajin Abraham and MobSF contributors, licensed under the
+GNU General Public License version 3 only (GPL-3.0-only).
+
+As a derivative work, msec is distributed under the same license, GPL-3.0-only.
+See the LICENSE file for the full text.
+
+Source files that port specific MobSF code name the upstream file they derive
+from in their module documentation.
