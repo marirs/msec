@@ -74,6 +74,27 @@ impl Entry {
     pub fn is_readable(&self) -> bool {
         self.data_offset.is_some()
     }
+
+    /// A readable stored file entry, for unit tests of analyses that only look at names and
+    /// sizes.
+    #[cfg(test)]
+    pub(crate) fn for_test(index: usize, name: &str, uncompressed_size: u64) -> Self {
+        Self {
+            index,
+            name: name.to_owned(),
+            raw_name: name.as_bytes().to_vec(),
+            method: format::METHOD_STORED,
+            flags: 0,
+            crc32: 0,
+            compressed_size: uncompressed_size,
+            uncompressed_size,
+            local_header_offset: 0,
+            unix_mode: None,
+            is_directory: name.ends_with('/'),
+            is_symlink: false,
+            data_offset: Some(0),
+        }
+    }
 }
 
 /// Where the archive's structures are in the file. Used by signature verification, which

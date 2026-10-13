@@ -12,12 +12,15 @@
 //! - [`FileHashes`]: the MD5 (MobSF's scan identifier), SHA-1 and SHA-256 of a package.
 //! - [`archive`]: a safe, bounded ZIP reader for packages that never extracts to disk and
 //!   reports structural anomalies (including those Android itself rejects).
+//! - [`android::Inventory`]: what an Android package contains: composition, DEX files, native
+//!   libraries per ABI, and the frameworks they reveal (Flutter, React Native, Unity, ...).
 //!
 //! Android manifest, certificate, network-security-config and binary analysis follow in the
 //! next releases. See the repository README for the porting roadmap.
 //!
 //! msec is an independent port and is not affiliated with or endorsed by the MobSF project.
 
+pub mod android;
 pub mod archive;
 pub mod hashes;
 pub mod magic;
