@@ -27,7 +27,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 0 | Scan types, magic bytes, hashes | Done (0.0.1) |
 | 0 | Safe archive reader (`msec::archive`) | Done |
 | 0 | Report types matching MobSF JSON keys, regex compatibility layer (`regex` then `fancy-regex`), golden-diff harness | Next |
-| 1 | AXML + ARSC decoder; manifest data and permission database; manifest analysis; network security config; certificate and signature analysis; ELF checks | Planned |
+| 1 | Binary XML and resource table decoders, manifest model, permission and attribute data (`msec::android`) | Done |
+| 1 | Manifest analysis; network security config; certificate and signature analysis; ELF checks | Next |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
 | 4 | Malware: domain lists, IP2Location reader, APKiD rules via yara-x, VirusTotal (opt-in) | Planned |
@@ -53,3 +54,6 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 3 | Duplicate entry names: the last one wins (`zipfile`) | The first one wins, as on Android, and `DuplicateName` is reported |
 | 4 | Structural tricks pass silently (prepended data, fake encryption flag, local header mismatches, overlapping entries, hidden data, second end record in the comment) | Each is reported as an `Anomaly`, marked when Android itself rejects it; the package is still analysed |
 | 5 | CRC and size of extracted data are checked by `zipfile` and fail the extraction | A mismatch is reported as an anomaly and the data is still returned for analysis |
+| 6 | Manifest attributes are read from androguard's decoded XML | `android:` attributes are matched by resource ID, as Android's package parser does; an attribute whose name string disagrees with its ID, or that has no ID, is reported (`XmlAnomalyKind::AttributeNameMismatch`, `UnresolvedAndroidAttribute`) and read the way Android reads it |
+| 7 | Malformed binary XML handling follows androguard | Follows AOSP `ResXMLTree`/`ResXMLParser`: last string pool wins, nodes need a 16-byte header, a bad attribute block ends the document; each case is reported, marked when Android rejects it |
+| 8 | Permission protection levels come from MobSF's bundled table | Generated from AOSP's framework manifest (`tools/generate_android_data.py`), with Android's own user-facing labels |

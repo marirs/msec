@@ -14,6 +14,9 @@
 //!   reports structural anomalies (including those Android itself rejects).
 //! - [`android::Inventory`]: what an Android package contains: composition, DEX files, native
 //!   libraries per ABI, and the frameworks they reveal (Flutter, React Native, Unity, ...).
+//! - [`android::Apk`]: the manifest and resource table decoded the way Android decodes them
+//!   ([`android::xml`], [`android::resources`], [`android::manifest`]), with framework
+//!   permission and SDK level data.
 //!
 //! Android manifest, certificate, network-security-config and binary analysis follow in the
 //! next releases. See the repository README for the porting roadmap.

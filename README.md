@@ -36,8 +36,8 @@ Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed 
 1. Foundation: a safe archive reader (done), report types matching MobSF's JSON report keys, a
    rule-engine regex compatibility layer.
 2. Android without a decompiler: binary XML and resource table decoding, manifest data and
-   permissions, manifest analysis, network security config, certificate and signature analysis,
-   ELF checks.
+   permissions (done), manifest analysis, network security config, certificate and signature
+   analysis, ELF checks.
 3. Code rules and strings: a libsast-compatible pattern engine over decompiled sources (jadx as an
    optional external tool), strings and secrets, trackers, SBOM, scorecard.
 4. iOS: plist, ATS and permissions, Mach-O checks, Objective-C metadata, IPA binary rules.
