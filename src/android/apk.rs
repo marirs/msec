@@ -22,8 +22,9 @@ pub struct Apk {
     pub manifest_document: Result<XmlDocument, String>,
     /// The manifest model, when the document decoded.
     pub manifest: Option<Manifest>,
-    /// The resource table, when present and readable.
-    pub resources: Result<ResourceTable, String>,
+    /// The resource table: `None` when the APK has none (valid, if unusual), else the table or
+    /// why it could not be read.
+    pub resources: Option<Result<ResourceTable, String>>,
     /// App name: the manifest label resolved against the resources.
     pub label: Option<String>,
     /// Version name, resolved when it is a reference.
@@ -39,14 +40,17 @@ impl Apk {
         let manifest_document = read_entry(archive, MANIFEST_ENTRY)
             .and_then(|bytes| xml::parse(&bytes).map_err(|error| error.to_string()));
         let manifest = manifest_document.as_ref().ok().map(Manifest::from_document);
-        let resources = read_entry(archive, RESOURCE_TABLE_ENTRY)
-            .and_then(|bytes| ResourceTable::parse(bytes).map_err(|error| error.to_string()));
+        let resources = archive.find(RESOURCE_TABLE_ENTRY).is_some().then(|| {
+            read_entry(archive, RESOURCE_TABLE_ENTRY)
+                .and_then(|bytes| ResourceTable::parse(bytes).map_err(|error| error.to_string()))
+        });
+        let table = resources.as_ref().and_then(|result| result.as_ref().ok());
 
         let resolve = |value: Option<&Value>| -> Option<String> {
             let value = value?;
-            match &resources {
-                Ok(table) => table.string(value),
-                Err(_) => value.as_str().map(str::to_owned),
+            match table {
+                Some(table) => table.string(value),
+                None => value.as_str().map(str::to_owned),
             }
         };
         let application = manifest
@@ -58,10 +62,7 @@ impl Apk {
                 .as_ref()
                 .and_then(|manifest| manifest.version_name.as_ref()),
         );
-        let locales = resources
-            .as_ref()
-            .map(ResourceTable::locales)
-            .unwrap_or_default();
+        let locales = table.map(ResourceTable::locales).unwrap_or_default();
         Self {
             inventory,
             manifest_document,
@@ -73,6 +74,11 @@ impl Apk {
         }
     }
 
+    /// The resource table, when present and readable.
+    pub fn resource_table(&self) -> Option<&ResourceTable> {
+        self.resources.as_ref()?.as_ref().ok()
+    }
+
     /// Path of the network security configuration file, when the manifest points to one.
     pub fn network_security_config_path(&self) -> Option<String> {
         let reference = self
@@ -82,7 +88,7 @@ impl Apk {
             .as_ref()?
             .network_security_config
             .as_ref()?;
-        let table = self.resources.as_ref().ok()?;
+        let table = self.resource_table()?;
         let files = table.files(reference.reference()?);
         files
             .iter()

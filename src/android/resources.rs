@@ -95,6 +95,13 @@ pub enum ResourceAnomalyKind {
     },
 }
 
+impl ResourceAnomalyKind {
+    /// True when Android's `ResTable` refuses the table (its chunk validation fails).
+    pub fn rejected_by_android(&self) -> bool {
+        matches!(self, Self::MalformedChunk(_) | Self::Misaligned)
+    }
+}
+
 /// A resource configuration (qualifiers such as locale, density and SDK level).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Config {
