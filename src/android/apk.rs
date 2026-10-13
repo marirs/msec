@@ -2,6 +2,10 @@
 
 use std::io::{Read, Seek};
 
+use super::analysis::{
+    ManifestFinding, NetworkFinding, NetworkSecurityConfig, analyse_manifest,
+    analyse_network_security,
+};
 use super::inventory::Inventory;
 use super::manifest::Manifest;
 use super::resources::ResourceTable;
@@ -31,6 +35,10 @@ pub struct Apk {
     pub version_name: Option<String>,
     /// Locales the app's strings are translated into.
     pub locales: Vec<String>,
+    /// The network security configuration: `None` when the manifest names none, else the
+    /// decoded configuration or why it could not be read. Only the file the manifest names is
+    /// read, as on Android.
+    pub network_security_config: Option<Result<NetworkSecurityConfig, String>>,
 }
 
 impl Apk {
@@ -63,7 +71,7 @@ impl Apk {
                 .and_then(|manifest| manifest.version_name.as_ref()),
         );
         let locales = table.map(ResourceTable::locales).unwrap_or_default();
-        Self {
+        let mut apk = Self {
             inventory,
             manifest_document,
             manifest,
@@ -71,7 +79,73 @@ impl Apk {
             label,
             version_name,
             locales,
-        }
+            network_security_config: None,
+        };
+        apk.network_security_config = apk.read_network_security_config(archive);
+        apk
+    }
+
+    fn read_network_security_config<R: Read + Seek>(
+        &self,
+        archive: &mut ZipArchive<R>,
+    ) -> Option<Result<NetworkSecurityConfig, String>> {
+        let declared = self
+            .manifest
+            .as_ref()?
+            .application
+            .as_ref()?
+            .network_security_config
+            .as_ref()?;
+        let Some(path) = self.network_security_config_path() else {
+            return Some(Err(format!("{declared} does not resolve to a file")));
+        };
+        Some(read_entry(archive, &path).and_then(|bytes| {
+            let document = xml::parse(&bytes).map_err(|error| error.to_string())?;
+            Ok(NetworkSecurityConfig::from_document(
+                &document,
+                self.resource_table(),
+            ))
+        }))
+    }
+
+    /// `@xml/name` for the configured network security configuration.
+    pub fn network_security_config_name(&self) -> Option<String> {
+        let reference = self
+            .manifest
+            .as_ref()?
+            .application
+            .as_ref()?
+            .network_security_config
+            .as_ref()?;
+        let name = reference
+            .reference()
+            .and_then(|id| self.resource_table()?.name(id));
+        Some(name.map_or_else(
+            || reference.to_string(),
+            |name| format!("@{}/{}", name.type_name, name.entry),
+        ))
+    }
+
+    /// Manifest security findings; empty when the manifest could not be read.
+    pub fn manifest_findings(&self) -> Vec<ManifestFinding> {
+        self.manifest.as_ref().map_or_else(Vec::new, |manifest| {
+            analyse_manifest(manifest, self.network_security_config_name().as_deref())
+        })
+    }
+
+    /// Network security configuration findings, with expiry dates compared to `today`
+    /// (`yyyy-MM-dd`). Empty when there is no readable configuration.
+    pub fn network_findings(&self, today: &str) -> Vec<NetworkFinding> {
+        let Some(Ok(config)) = &self.network_security_config else {
+            return Vec::new();
+        };
+        let debuggable = self
+            .manifest
+            .as_ref()
+            .and_then(|manifest| manifest.application.as_ref())
+            .and_then(|application| application.debuggable)
+            == Some(true);
+        analyse_network_security(config, debuggable, today)
     }
 
     /// The resource table, when present and readable.

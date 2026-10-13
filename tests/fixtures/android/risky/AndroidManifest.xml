@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fixture: manifest risks for msec's manifest checks. Rebuild with ../build.sh after editing. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.risky"
+    android:versionCode="7" android:versionName="0.7">
+  <uses-sdk android:minSdkVersion="16" android:targetSdkVersion="22"/>
+  <permission android:name="com.example.risky.permission.OPEN" android:protectionLevel="normal"/>
+  <permission android:name="com.example.risky.permission.ADMIN" android:protectionLevel="signature"/>
+  <application android:label="Risky" android:testOnly="true" android:directBootAware="true">
+    <activity android:name=".Main" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+    <activity android:name=".Hijackable" android:exported="true" android:launchMode="singleTask" android:taskAffinity="com.example.other"/>
+    <activity android:name=".Links">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="https" android:host="risky.example.com" android:port="8443"/>
+      </intent-filter>
+    </activity>
+    <activity android:name=".NoAffinity" android:exported="false" android:taskAffinity=""/>
+    <service android:name=".OpenService" android:exported="true" android:permission="com.example.risky.permission.OPEN"/>
+    <service android:name=".AdminService" android:exported="true" android:permission="com.example.risky.permission.ADMIN"/>
+    <service android:name=".Jobs" android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE"/>
+    <service android:name=".Unknown" android:exported="true" android:permission="org.thirdparty.permission.X"/>
+    <receiver android:name=".SecretCodes">
+      <intent-filter android:priority="999">
+        <action android:name="android.provider.Telephony.SECRET_CODE"/>
+        <data android:scheme="android_secret_code" android:host="4636"/>
+      </intent-filter>
+    </receiver>
+    <receiver android:name=".BinarySms" android:exported="true">
+      <intent-filter android:priority="999">
+        <action android:name="android.intent.action.DATA_SMS_RECEIVED"/>
+        <data android:scheme="sms" android:host="localhost" android:port="6734"/>
+      </intent-filter>
+    </receiver>
+    <provider android:name=".Files" android:authorities="com.example.risky.files" android:grantUriPermissions="true">
+      <grant-uri-permission android:pathPrefix="/"/>
+    </provider>
+  </application>
+</manifest>

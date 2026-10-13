@@ -1,0 +1,21 @@
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system"/>
+      <certificates src="user" overridePins="true"/>
+    </trust-anchors>
+  </base-config>
+  <domain-config cleartextTrafficPermitted="false">
+    <domain includeSubdomains="true">api.example.com</domain>
+    <pin-set expiration="2024-01-01">
+      <pin digest="SHA-256">7HIpactkIAq2Y49orFOOQKurWxmmSFZhBCoQYcRhJ3Y=</pin>
+    </pin-set>
+    <trust-anchors><certificates src="@raw/company_ca"/></trust-anchors>
+    <domain-config>
+      <domain>legacy.api.example.com</domain>
+    </domain-config>
+  </domain-config>
+  <debug-overrides cleartextTrafficPermitted="true">
+    <trust-anchors><certificates src="@raw/company_ca" overridePins="true"/></trust-anchors>
+  </debug-overrides>
+</network-security-config>

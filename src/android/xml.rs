@@ -89,6 +89,9 @@ pub struct XmlAttribute {
     pub resource_id: Option<u32>,
     /// The typed value Android reads.
     pub value: Value,
+    /// The raw string the compiler kept (`rawValue`), when there is one. Android reads
+    /// [`XmlAttribute::value`]; some tools show this.
+    pub raw: Option<String>,
 }
 
 impl XmlAttribute {
@@ -516,6 +519,7 @@ impl NodeReader<'_> {
             .optional_string(Some(name_index), offset)
             .unwrap_or_default();
         let resource_id = self.resource_id(name_index);
+        let raw_value = self.optional_string(u32_at(raw, 8), offset);
         let data_type = raw[15];
         let data = u32_at(raw, 16).unwrap_or(0);
         let value = Value::decode(data_type, data, |index| {
@@ -529,6 +533,7 @@ impl NodeReader<'_> {
             name,
             resource_id,
             value,
+            raw: raw_value,
         };
         self.check_attribute_identity(&attribute, offset);
         attribute

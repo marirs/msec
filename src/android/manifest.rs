@@ -23,9 +23,11 @@ pub(crate) mod attr {
     pub(crate) const DEBUGGABLE: u32 = 0x0101_000f;
     pub(crate) const EXPORTED: u32 = 0x0101_0010;
     pub(crate) const PROCESS: u32 = 0x0101_0011;
+    pub(crate) const TASK_AFFINITY: u32 = 0x0101_0012;
     pub(crate) const AUTHORITIES: u32 = 0x0101_0018;
     pub(crate) const GRANT_URI_PERMISSIONS: u32 = 0x0101_001b;
     pub(crate) const PRIORITY: u32 = 0x0101_001c;
+    pub(crate) const LAUNCH_MODE: u32 = 0x0101_001d;
     pub(crate) const VALUE: u32 = 0x0101_0024;
     pub(crate) const RESOURCE: u32 = 0x0101_0025;
     pub(crate) const MIME_TYPE: u32 = 0x0101_0026;
@@ -59,6 +61,7 @@ pub(crate) mod attr {
     pub(crate) const FULL_BACKUP_CONTENT: u32 = 0x0101_04eb;
     pub(crate) const USES_CLEARTEXT_TRAFFIC: u32 = 0x0101_04ec;
     pub(crate) const AUTO_VERIFY: u32 = 0x0101_04ee;
+    pub(crate) const DIRECT_BOOT_AWARE: u32 = 0x0101_0505;
     pub(crate) const NETWORK_SECURITY_CONFIG: u32 = 0x0101_0527;
     pub(crate) const ROUND_ICON: u32 = 0x0101_052c;
     pub(crate) const COMPILE_SDK_VERSION: u32 = 0x0101_0572;
@@ -244,6 +247,45 @@ impl ComponentKind {
     ];
 }
 
+/// `android:launchMode` of an activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchMode {
+    /// `standard` (the default).
+    Standard,
+    /// `singleTop`.
+    SingleTop,
+    /// `singleTask`.
+    SingleTask,
+    /// `singleInstance`.
+    SingleInstance,
+    /// `singleInstancePerTask` (Android 12).
+    SingleInstancePerTask,
+}
+
+impl LaunchMode {
+    fn from_value(value: i64) -> Option<Self> {
+        Some(match value {
+            0 => Self::Standard,
+            1 => Self::SingleTop,
+            2 => Self::SingleTask,
+            3 => Self::SingleInstance,
+            4 => Self::SingleInstancePerTask,
+            _ => return None,
+        })
+    }
+}
+
+/// A provider's `<grant-uri-permission>`: the paths for which callers may be granted access.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GrantUriPermission {
+    /// Exact path.
+    pub path: Option<String>,
+    /// Path prefix.
+    pub path_prefix: Option<String>,
+    /// Path pattern.
+    pub path_pattern: Option<String>,
+}
+
 /// One `<data>` element of an intent filter.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IntentData {
@@ -353,6 +395,12 @@ pub struct Component {
     pub process: Option<String>,
     /// Alias target.
     pub target_activity: Option<String>,
+    /// Activity `taskAffinity`; `Some("")` is the explicit "no affinity" value.
+    pub task_affinity: Option<String>,
+    /// Activity `launchMode`.
+    pub launch_mode: Option<LaunchMode>,
+    /// Provider `<grant-uri-permission>` elements.
+    pub grant_uri_permission_paths: Vec<GrantUriPermission>,
     /// Intent filters.
     pub intent_filters: Vec<IntentFilter>,
     /// Meta-data.
@@ -384,6 +432,10 @@ impl Component {
 pub struct Application {
     /// Application class.
     pub name: Option<String>,
+    /// `android:permission`: the default permission callers need for every component.
+    pub permission: Option<String>,
+    /// `android:directBootAware`.
+    pub direct_boot_aware: Option<bool>,
     /// Label (often a string reference).
     pub label: Option<Value>,
     /// Icon reference.
@@ -757,6 +809,8 @@ fn authorities(element: &XmlElement) -> Vec<String> {
 fn read_application(element: &XmlElement) -> Application {
     let mut application = Application {
         name: text(element, attr::NAME),
+        permission: text(element, attr::PERMISSION),
+        direct_boot_aware: boolean(element, attr::DIRECT_BOOT_AWARE),
         label: element.attribute(attr::LABEL).cloned(),
         icon: element.attribute(attr::ICON).cloned(),
         round_icon: element.attribute(attr::ROUND_ICON).cloned(),
@@ -810,6 +864,16 @@ fn read_component(element: &XmlElement, kind: ComponentKind) -> Option<Component
         grant_uri_permissions: boolean(element, attr::GRANT_URI_PERMISSIONS),
         process: text(element, attr::PROCESS),
         target_activity: text(element, attr::TARGET_ACTIVITY),
+        task_affinity: text(element, attr::TASK_AFFINITY),
+        launch_mode: integer(element, attr::LAUNCH_MODE).and_then(LaunchMode::from_value),
+        grant_uri_permission_paths: element
+            .elements_named("grant-uri-permission")
+            .map(|grant| GrantUriPermission {
+                path: text(grant, attr::PATH),
+                path_prefix: text(grant, attr::PATH_PREFIX),
+                path_pattern: text(grant, attr::PATH_PATTERN),
+            })
+            .collect(),
         intent_filters: element
             .elements_named("intent-filter")
             .map(read_intent_filter)
@@ -884,6 +948,9 @@ mod tests {
             (attr::DEBUGGABLE, "debuggable"),
             (attr::EXPORTED, "exported"),
             (attr::PROCESS, "process"),
+            (attr::TASK_AFFINITY, "taskAffinity"),
+            (attr::LAUNCH_MODE, "launchMode"),
+            (attr::DIRECT_BOOT_AWARE, "directBootAware"),
             (attr::AUTHORITIES, "authorities"),
             (attr::GRANT_URI_PERMISSIONS, "grantUriPermissions"),
             (attr::PRIORITY, "priority"),

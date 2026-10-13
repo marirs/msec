@@ -53,9 +53,13 @@ fn dump_element(out: &mut String, element: &XmlElement, indent: usize) {
             (Some(namespace), None) => format!("{namespace}:{}", attribute.name),
             (None, _) => attribute.name.clone(),
         };
-        let value = match &attribute.value {
-            Value::String(Some(text)) => format!("\"{text}\" (Raw: \"{text}\")"),
-            other => other.to_string(),
+        let value = match (&attribute.value, &attribute.raw) {
+            // aapt2 prints the raw string only when it is not empty.
+            (Value::String(Some(text)), Some(raw)) if !raw.is_empty() => {
+                format!("\"{text}\" (Raw: \"{raw}\")")
+            }
+            (Value::String(Some(text)), _) => format!("\"{text}\""),
+            (other, _) => other.to_string(),
         };
         out.push_str(&format!("{}A: {name}={value}\n", " ".repeat(indent + 2)));
     }
@@ -65,14 +69,31 @@ fn dump_element(out: &mut String, element: &XmlElement, indent: usize) {
 }
 
 #[test]
-fn binary_manifest_decodes_exactly_like_aapt2() {
-    let document = xml::parse(&entry("AndroidManifest.xml")).unwrap();
-    assert!(document.anomalies.is_empty(), "{:?}", document.anomalies);
-    let ours = aapt2_dump(&document);
-    for (line_number, (ours, theirs)) in ours.lines().zip(BASIC_XMLTREE.lines()).enumerate() {
-        assert_eq!(ours, theirs, "line {}", line_number + 1);
+fn binary_manifests_decode_exactly_like_aapt2() {
+    let fixtures: [(&[u8], &str); 3] = [
+        (BASIC_APK, BASIC_XMLTREE),
+        (
+            include_bytes!("fixtures/android/risky.apk"),
+            include_str!("fixtures/android/risky.xmltree.txt"),
+        ),
+        (
+            include_bytes!("fixtures/android/network.apk"),
+            include_str!("fixtures/android/network.xmltree.txt"),
+        ),
+    ];
+    for (apk, xmltree) in fixtures {
+        let bytes = archive(apk)
+            .read_by_name("AndroidManifest.xml")
+            .unwrap()
+            .unwrap();
+        let document = xml::parse(&bytes).unwrap();
+        assert!(document.anomalies.is_empty(), "{:?}", document.anomalies);
+        let ours = aapt2_dump(&document);
+        for (line_number, (ours, theirs)) in ours.lines().zip(xmltree.lines()).enumerate() {
+            assert_eq!(ours, theirs, "line {}", line_number + 1);
+        }
+        assert_eq!(ours.lines().count(), xmltree.lines().count());
     }
-    assert_eq!(ours.lines().count(), BASIC_XMLTREE.lines().count());
 }
 
 #[test]

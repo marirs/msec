@@ -1,5 +1,6 @@
 //! Android package analysis.
 
+pub mod analysis;
 mod apk;
 mod chunk;
 mod generated;

@@ -28,7 +28,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 0 | Safe archive reader (`msec::archive`) | Done |
 | 0 | Report types matching MobSF JSON keys, regex compatibility layer (`regex` then `fancy-regex`), golden-diff harness | Next |
 | 1 | Binary XML and resource table decoders, manifest model, permission and attribute data (`msec::android`) | Done |
-| 1 | Manifest analysis; network security config; certificate and signature analysis; ELF checks | Next |
+| 1 | Manifest analysis and network security configuration analysis (`msec::android::analysis`) | Done |
+| 1 | Certificate and signature analysis; ELF checks | Next |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
 | 4 | Malware: domain lists, IP2Location reader, APKiD rules via yara-x, VirusTotal (opt-in) | Planned |
@@ -56,4 +57,12 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 5 | CRC and size of extracted data are checked by `zipfile` and fail the extraction | A mismatch is reported as an anomaly and the data is still returned for analysis |
 | 6 | Manifest attributes are read from androguard's decoded XML | `android:` attributes are matched by resource ID, as Android's package parser does; an attribute whose name string disagrees with its ID, or that has no ID, is reported (`XmlAnomalyKind::AttributeNameMismatch`, `UnresolvedAndroidAttribute`) and read the way Android reads it |
 | 7 | Malformed binary XML handling follows androguard | Follows AOSP `ResXMLTree`/`ResXMLParser`: last string pool wins, nodes need a 16-byte header, a bad attribute block ends the document; each case is reported, marked when Android rejects it |
+| 9 | Exported components protected by a framework permission (for example `BIND_JOB_SERVICE`) are reported as "protection level not defined", because only the app's own `<permission>`s are looked up | Framework permissions are looked up in the AOSP table too; signature-level ones count as protected (info), like the app's own |
+| 10 | The launcher activity is excluded from exported findings only when the manifest names it fully qualified (`.Main` is compared with `com.app.Main`) | The launcher activity is always excluded |
+| 11 | `minSdkVersion`/`targetSdkVersion` missing: platform checks are skipped, and StrandHogg checks assume target 26 | Android's defaults apply (minimum 1, target equal to minimum), so an app without `<uses-sdk>` is reported as installable everywhere |
+| 12 | Every `<data android:port>` is reported as a data SMS port, including ports on web links | Only ports in filters for `DATA_SMS_RECEIVED` or with the `sms` scheme |
+| 13 | `<data>` elements anywhere, including `<queries>`, feed the dialer-code and SMS checks; `<action android:priority>` is checked | Only components' intent filters (queries are not entry points); actions have no priority attribute in Android, so that check is dropped |
+| 14 | App Links: `assetlinks.json` is fetched during every scan | Offline by default; the network check is deferred to an explicit online mode. Offline, http(s) links without `autoVerify` are reported (`msec_unverified_app_links`) |
+| 15 | Network security config: the file is looked up in apktool output, with a fallback to any `*network_security*.xml` | Only the file the manifest references, as Android does; `@raw/` sources are named through the resource table; nested `<domain-config>`s are read with inherited cleartext; an expired `pin-set` is reported (`PinsExpired`) |
+| 16 | Not checked | Added (msec origin): cleartext allowed by default (target below API 28, nothing set), user CAs trusted by default (target below API 24, no configuration) |
 | 8 | Permission protection levels come from MobSF's bundled table | Generated from AOSP's framework manifest (`tools/generate_android_data.py`), with Android's own user-facing labels |
