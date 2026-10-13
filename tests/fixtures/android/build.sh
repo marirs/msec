@@ -13,3 +13,6 @@ for fixture in basic risky network; do
   "$aapt2" dump xmltree --file AndroidManifest.xml "$fixture.apk" > "$fixture.xmltree.txt"
   rm -rf "$work"
 done
+# Signed variants of basic.apk (fresh keys each run; tests check structure, not key values).
+mkdir -p signed
+python3 -I sign_fixtures.py basic.apk signed

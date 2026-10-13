@@ -36,6 +36,9 @@ pub use error::ArchiveError;
 pub use limits::Limits;
 
 use inflate::InflateError;
+
+/// Largest single [`ZipArchive::read_raw`] request; callers read big regions in chunks.
+pub const MAX_RAW_READ: u64 = 16 * 1024 * 1024;
 use locate::CentralDirectoryLocation;
 
 /// One entry from the central directory.
@@ -247,6 +250,19 @@ impl<R: Read + Seek> ZipArchive<R> {
             Some(index) => self.read(index).map(Some),
             None => Ok(None),
         }
+    }
+
+    /// Reads raw file bytes (no decompression), for analyses that hash or parse file regions:
+    /// the APK Signing Block, signature content digests. At most [`MAX_RAW_READ`] bytes per call;
+    /// the range must lie inside the file.
+    pub fn read_raw(&mut self, offset: u64, length: u64) -> Result<Vec<u8>, ArchiveError> {
+        let end = offset.checked_add(length);
+        if length > MAX_RAW_READ || end.is_none_or(|end| end > self.layout.archive_bytes) {
+            return Err(ArchiveError::InvalidCentralDirectory(
+                "raw read outside the file",
+            ));
+        }
+        read_exact_at(&mut self.reader, offset, length)
     }
 
     /// Returns the underlying reader, for analyses that need raw file regions (the APK

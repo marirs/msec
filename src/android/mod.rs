@@ -9,6 +9,7 @@ pub mod manifest;
 pub mod permissions;
 pub mod resources;
 pub mod sdk;
+pub mod signing;
 mod string_pool;
 pub mod value;
 pub mod xml;

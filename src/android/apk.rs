@@ -3,12 +3,13 @@
 use std::io::{Read, Seek};
 
 use super::analysis::{
-    ManifestFinding, NetworkFinding, NetworkSecurityConfig, analyse_manifest,
-    analyse_network_security,
+    ManifestFinding, NetworkFinding, NetworkSecurityConfig, SigningFinding, analyse_manifest,
+    analyse_network_security, analyse_signing,
 };
 use super::inventory::Inventory;
 use super::manifest::Manifest;
 use super::resources::ResourceTable;
+use super::signing::SigningReport;
 use super::value::Value;
 use super::xml::{self, XmlDocument};
 use crate::archive::ZipArchive;
@@ -39,6 +40,8 @@ pub struct Apk {
     /// decoded configuration or why it could not be read. Only the file the manifest names is
     /// read, as on Android.
     pub network_security_config: Option<Result<NetworkSecurityConfig, String>>,
+    /// Signatures, verified.
+    pub signing: SigningReport,
 }
 
 impl Apk {
@@ -80,6 +83,7 @@ impl Apk {
             version_name,
             locales,
             network_security_config: None,
+            signing: SigningReport::read(archive),
         };
         apk.network_security_config = apk.read_network_security_config(archive);
         apk
@@ -131,6 +135,15 @@ impl Apk {
         self.manifest.as_ref().map_or_else(Vec::new, |manifest| {
             analyse_manifest(manifest, self.network_security_config_name().as_deref())
         })
+    }
+
+    /// Signing findings; `today` (`yyyy-MM-dd`) dates certificate expiry. Without a readable
+    /// manifest, Android's defaults (minimum and target API 1) apply.
+    pub fn signing_findings(&self, today: &str) -> Vec<SigningFinding> {
+        let manifest = self.manifest.as_ref();
+        let min_sdk = manifest.and_then(Manifest::min_sdk).unwrap_or(1);
+        let target_sdk = manifest.and_then(Manifest::target_sdk).unwrap_or(min_sdk);
+        analyse_signing(&self.signing, min_sdk, target_sdk, today)
     }
 
     /// Network security configuration findings, with expiry dates compared to `today`

@@ -29,7 +29,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 0 | Report types matching MobSF JSON keys, regex compatibility layer (`regex` then `fancy-regex`), golden-diff harness | Next |
 | 1 | Binary XML and resource table decoders, manifest model, permission and attribute data (`msec::android`) | Done |
 | 1 | Manifest analysis and network security configuration analysis (`msec::android::analysis`) | Done |
-| 1 | Certificate and signature analysis; ELF checks | Next |
+| 1 | Signing: v1/v2/v3/v3.1 parsing and full verification, certificates, signing checks (`msec::android::signing`, `analysis::signing_checks`) | Done |
+| 1 | ELF checks | Next |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
 | 4 | Malware: domain lists, IP2Location reader, APKiD rules via yara-x, VirusTotal (opt-in) | Planned |
@@ -65,4 +66,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 14 | App Links: `assetlinks.json` is fetched during every scan | Offline by default; the network check is deferred to an explicit online mode. Offline, http(s) links without `autoVerify` are reported (`msec_unverified_app_links`) |
 | 15 | Network security config: the file is looked up in apktool output, with a fallback to any `*network_security*.xml` | Only the file the manifest references, as Android does; `@raw/` sources are named through the resource table; nested `<domain-config>`s are read with inherited cleartext; an expired `pin-set` is reported (`PinsExpired`) |
 | 16 | Not checked | Added (msec origin): cleartext allowed by default (target below API 28, nothing set), user CAs trusted by default (target below API 24, no configuration) |
+| 17 | Signature schemes are read from `apksigner` output (Java required) or androguard; signatures are not verified by MobSF itself | msec parses the APK Signing Block and JAR files and verifies everything: v2/v3/v3.1 signatures (RSA PKCS#1 and PSS, ECDSA P-256/384/521, DSA), chunked SHA-256/SHA-512 content digests, v1 PKCS#7 signatures (with or without signed attributes), `.SF` and manifest digests, unsigned entries. fs-verity digests are listed but not recomputed. v4 (`.idsig`) is a separate file |
+| 18 | Janus: any v1 signature with a known minimum SDK is high; v1 with v2/v3 is a warning below Android 8.1 and high otherwise | v1 only: high when the app installs below Android 8.1; v1 with v2/v3: warning when it installs below Android 7.0 (the only releases that check v1 alone); nothing otherwise |
+| 19 | Not checked | Added (msec origin): signatures that do not verify, Android releases in the app's range that would reject it (missing scheme, stripped v3, stripped v2 via `X-Android-APK-Signed`), RSA keys below 2048 bits, v1-only APKs targeting Android 11+, expired signer certificates (info) |
+| 20 | Certificate details via asn1crypto (`get_cert_details`) | Same fields from `x509-cert`; the public key fingerprint is SHA-256 of the DER `SubjectPublicKeyInfo` (MobSF hashes a text rendering of the key numbers) |
 | 8 | Permission protection levels come from MobSF's bundled table | Generated from AOSP's framework manifest (`tools/generate_android_data.py`), with Android's own user-facing labels |

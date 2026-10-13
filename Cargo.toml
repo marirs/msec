@@ -13,10 +13,21 @@ exclude = [".github/"]
 
 [dependencies]
 crc32fast = "1.5.2"
+der = { version = "0.8.2", features = ["derive", "oid"] }
+dsa = "0.7.0"
+ecdsa = { version = "0.17.0", features = ["der", "digest", "spki", "std"] }
 flate2 = "1.1.10"
 md-5 = "0.11.0"
+p256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
+p384 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
+p521 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
+# Pinned exactly: the 0.10 line (digest 0.11, matching sha2 0.11) is still a release candidate.
+rsa = { version = "=0.10.0-rc.19", default-features = false, features = ["std", "encoding"] }
 sha1 = "0.11.0"
 sha2 = "0.11.1"
+signature = "3.0.0"
+spki = "0.8.1"
+x509-cert = { version = "0.3.0", default-features = false }
 
 [dev-dependencies]
 # Independent writer for cross-checking the reader; pure-Rust deflate only.
