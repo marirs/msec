@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An on-demand feature module that declares its own component and permission, which the
+     base manifest does not list. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:dist="http://schemas.android.com/apk/distribution"
+    package="dev.appchk.fixture.bundle"
+    split="camera">
+  <dist:module dist:title="Camera">
+    <dist:delivery>
+      <dist:on-demand/>
+    </dist:delivery>
+    <dist:fusing dist:include="true"/>
+  </dist:module>
+  <uses-permission android:name="android.permission.CAMERA"/>
+  <application android:hasCode="false">
+    <activity android:name="dev.appchk.fixture.bundle.camera.CaptureActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.media.action.IMAGE_CAPTURE"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

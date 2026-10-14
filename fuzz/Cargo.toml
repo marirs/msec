@@ -61,6 +61,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "protobuf_xml"
+path = "fuzz_targets/protobuf_xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bundle"
+path = "fuzz_targets/bundle.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "apk"
 path = "fuzz_targets/apk.rs"
 test = false

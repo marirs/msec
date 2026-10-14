@@ -18,6 +18,9 @@ use super::generated::attributes::FRAMEWORK_ATTRIBUTES;
 use super::string_pool::{StringPool, StringPoolProblem};
 use super::value::Value;
 
+pub use super::proto::ProtoProblem;
+pub use super::proto_xml::{XmlFormat, parse_proto};
+
 /// Namespace URI of `android:` attributes.
 pub const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
@@ -29,7 +32,7 @@ const ATTRIBUTE_LENGTH: usize = 20;
 const START_ELEMENT_EXTENSION_LENGTH: usize = 20;
 const NO_STRING: u32 = u32::MAX;
 /// Deeper elements are skipped. Real manifests nest about six levels.
-const MAX_DEPTH: usize = 256;
+pub(crate) const MAX_DEPTH: usize = 256;
 /// The most attributes decoded from a document of `length` bytes: as many as it could hold
 /// without overlapping records. A start element may declare an attribute size below 20 bytes
 /// (AOSP `validateNode` allows it; the records then overlap), so 36 bytes can declare 65,535
@@ -254,6 +257,11 @@ pub enum XmlError {
     NoStringPool,
     /// The string pool is invalid.
     StringPool(StringPoolProblem),
+    /// The file is aapt2's protobuf XML, the format inside app bundles, which Android cannot
+    /// read: in an APK, Android rejects it.
+    ProtobufNotBinary,
+    /// Protobuf XML that protobuf's own parser rejects (and bundletool with it).
+    InvalidProtobuf(ProtoProblem),
 }
 
 impl std::fmt::Display for XmlError {
@@ -263,14 +271,25 @@ impl std::fmt::Display for XmlError {
             Self::Chunk(problem) => write!(formatter, "invalid document header: {problem:?}"),
             Self::NoStringPool => write!(formatter, "no string pool"),
             Self::StringPool(problem) => write!(formatter, "invalid string pool: {problem:?}"),
+            Self::ProtobufNotBinary => write!(
+                formatter,
+                "protobuf XML (the app bundle format), not the binary XML Android reads"
+            ),
+            Self::InvalidProtobuf(problem) => {
+                write!(formatter, "invalid protobuf XML: {problem:?}")
+            }
         }
     }
 }
 
 impl std::error::Error for XmlError {}
 
-/// Decodes a binary XML file.
+/// Decodes a binary XML file. A protobuf XML file (from an app bundle) is refused with
+/// [`XmlError::ProtobufNotBinary`]; [`parse_proto`] reads those.
 pub fn parse(bytes: &[u8]) -> Result<XmlDocument, XmlError> {
+    if XmlFormat::detect(bytes) == Some(XmlFormat::Protobuf) {
+        return Err(XmlError::ProtobufNotBinary);
+    }
     let mut anomalies = Vec::new();
     let end = document_end(bytes, &mut anomalies)?;
     let header_size =
@@ -559,29 +578,8 @@ impl NodeReader<'_> {
 
     /// Flags attributes whose name string and resource ID tell different stories.
     fn check_attribute_identity(&mut self, attribute: &XmlAttribute, offset: usize) {
-        match attribute.resource_id.and_then(framework_attribute_name) {
-            Some(resolved) if resolved != attribute.name => self.anomaly(
-                XmlAnomalyKind::AttributeNameMismatch {
-                    resolved: resolved.to_owned(),
-                    written: attribute.name.clone(),
-                },
-                offset,
-            ),
-            Some(_) => {}
-            None => {
-                let is_android = attribute.namespace.as_deref() == Some(ANDROID_NAMESPACE);
-                if is_android
-                    && attribute.resource_id.is_none()
-                    && framework_attribute_id(&attribute.name).is_some()
-                {
-                    self.anomaly(
-                        XmlAnomalyKind::UnresolvedAndroidAttribute {
-                            name: attribute.name.clone(),
-                        },
-                        offset,
-                    );
-                }
-            }
+        if let Some(kind) = attribute_identity_anomaly(attribute) {
+            self.anomaly(kind, offset);
         }
     }
 
@@ -699,6 +697,29 @@ impl TreeBuilder {
     }
 }
 
+/// An attribute whose name string and resource ID tell different stories: Android goes by the
+/// ID, name-based tools by the string. Shared by binary and protobuf XML.
+pub(crate) fn attribute_identity_anomaly(attribute: &XmlAttribute) -> Option<XmlAnomalyKind> {
+    match attribute.resource_id.and_then(framework_attribute_name) {
+        Some(resolved) if resolved != attribute.name => {
+            Some(XmlAnomalyKind::AttributeNameMismatch {
+                resolved: resolved.to_owned(),
+                written: attribute.name.clone(),
+            })
+        }
+        Some(_) => None,
+        None => {
+            let is_android = attribute.namespace.as_deref() == Some(ANDROID_NAMESPACE);
+            (is_android
+                && attribute.resource_id.is_none()
+                && framework_attribute_id(&attribute.name).is_some())
+            .then(|| XmlAnomalyKind::UnresolvedAndroidAttribute {
+                name: attribute.name.clone(),
+            })
+        }
+    }
+}
+
 /// Name of a framework attribute resource ID (`0x01010001` is `label`).
 pub fn framework_attribute_name(resource_id: u32) -> Option<&'static str> {
     FRAMEWORK_ATTRIBUTES
@@ -769,6 +790,8 @@ fn write_element(
     for child in &element.children {
         match child {
             XmlNode::Element(child) => write_element(out, child, namespaces, depth + 1, false),
+            // Protobuf XML keeps the whitespace between elements; it carries no content.
+            XmlNode::Text(text) if text.trim().is_empty() => {}
             XmlNode::Text(text) => {
                 let _ = writeln!(out, "{indent}  {}", escape(text.trim()));
             }

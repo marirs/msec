@@ -1,0 +1,32 @@
+N: android=http://schemas.android.com/apk/res/android (line=5)
+  E: manifest (line=5)
+    A: package="dev.appchk.fixture.code" (Raw: "dev.appchk.fixture.code")
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=7 (Raw: "7")
+    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="2.0" (Raw: "2.0")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37 (Raw: "37")
+    A: platformBuildVersionCode=37 (Raw: "37")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
+    A: platformBuildVersionName=17 (Raw: "17")
+      T: '\n  '
+      E: uses-sdk (line=9)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=21 (Raw: "21")
+        A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=36 (Raw: "36")
+      T: '\n  '
+      E: application (line=10)
+        A: http://schemas.android.com/apk/res/android:label(0x01010001)=@string/app_name (Raw: "@string/app_name")
+          T: '\n    '
+          E: activity (line=11)
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true (Raw: "true")
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".MainActivity" (Raw: ".MainActivity")
+              T: '\n      '
+              E: intent-filter (line=12)
+                  T: '\n        '
+                  E: action (line=13)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")
+                  T: '\n        '
+                  E: category (line=14)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")
+                  T: '\n      '
+              T: '\n    '
+          T: '\n  '
+      T: '\n'

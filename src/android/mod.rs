@@ -2,6 +2,7 @@
 
 pub mod analysis;
 mod apk;
+pub mod bundle;
 mod chunk;
 pub mod dex;
 mod generated;
@@ -9,6 +10,8 @@ pub mod inventory;
 pub mod manifest;
 pub mod native;
 pub mod permissions;
+mod proto;
+mod proto_xml;
 pub mod resources;
 pub mod sdk;
 pub mod signing;
@@ -17,6 +20,7 @@ pub mod value;
 pub mod xml;
 
 pub use apk::Apk;
+pub use bundle::Bundle;
 pub use chunk::ChunkProblem;
 pub use inventory::Inventory;
 pub use manifest::Manifest;

@@ -1,0 +1,20 @@
+N: android=http://schemas.android.com/apk/res/android (line=3)
+  E: manifest (line=3)
+    A: package="com.example.network" (Raw: "com.example.network")
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1 (Raw: "1")
+    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="1.0" (Raw: "1.0")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37 (Raw: "37")
+    A: platformBuildVersionCode=37 (Raw: "37")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
+    A: platformBuildVersionName=17 (Raw: "17")
+      T: '\n  '
+      E: uses-sdk (line=5)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=29 (Raw: "29")
+        A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=35 (Raw: "35")
+      T: '\n  '
+      E: application (line=6)
+        A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false (Raw: "false")
+        A: http://schemas.android.com/apk/res/android:debuggable(0x0101000f)=true (Raw: "true")
+        A: http://schemas.android.com/apk/res/android:label(0x01010001)="Network" (Raw: "Network")
+        A: http://schemas.android.com/apk/res/android:networkSecurityConfig(0x01010527)=@xml/netsec (Raw: "@xml/netsec")
+      T: '\n'

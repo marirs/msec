@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A fast-follow asset pack: assets only. -->
+<manifest xmlns:dist="http://schemas.android.com/apk/distribution"
+    package="dev.appchk.fixture.bundle"
+    split="textures">
+  <dist:module dist:type="asset-pack">
+    <dist:delivery>
+      <dist:fast-follow/>
+    </dist:delivery>
+    <dist:fusing dist:include="true"/>
+  </dist:module>
+</manifest>

@@ -1,0 +1,43 @@
+N: android=http://schemas.android.com/apk/res/android (line=4)
+  N: dist=http://schemas.android.com/apk/distribution (line=4)
+    E: manifest (line=4)
+      A: package="dev.appchk.fixture.bundle" (Raw: "dev.appchk.fixture.bundle")
+      A: split="camera" (Raw: "camera")
+      A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37 (Raw: "37")
+      A: platformBuildVersionCode=37 (Raw: "37")
+      A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
+      A: platformBuildVersionName=17 (Raw: "17")
+        T: '\n  '
+        E: http://schemas.android.com/apk/distribution:module (line=8)
+          A: http://schemas.android.com/apk/distribution:title="Camera" (Raw: "Camera")
+            T: '\n    '
+            E: http://schemas.android.com/apk/distribution:delivery (line=9)
+                T: '\n      '
+                E: http://schemas.android.com/apk/distribution:on-demand (line=10)
+                T: '\n    '
+            T: '\n    '
+            E: http://schemas.android.com/apk/distribution:fusing (line=12)
+              A: http://schemas.android.com/apk/distribution:include=true (Raw: "true")
+            T: '\n  '
+        T: '\n  '
+        E: uses-permission (line=14)
+          A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.CAMERA" (Raw: "android.permission.CAMERA")
+        T: '\n  '
+        E: application (line=15)
+          A: http://schemas.android.com/apk/res/android:hasCode(0x0101000c)=false (Raw: "false")
+            T: '\n    '
+            E: activity (line=16)
+              A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true (Raw: "true")
+              A: http://schemas.android.com/apk/res/android:name(0x01010003)="dev.appchk.fixture.bundle.camera.CaptureActivity" (Raw: "dev.appchk.fixture.bundle.camera.CaptureActivity")
+                T: '\n      '
+                E: intent-filter (line=17)
+                    T: '\n        '
+                    E: action (line=18)
+                      A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.media.action.IMAGE_CAPTURE" (Raw: "android.media.action.IMAGE_CAPTURE")
+                    T: '\n        '
+                    E: category (line=19)
+                      A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.category.DEFAULT" (Raw: "android.intent.category.DEFAULT")
+                    T: '\n      '
+                T: '\n    '
+            T: '\n  '
+        T: '\n'

@@ -1,0 +1,44 @@
+N: android=http://schemas.android.com/apk/res/android (line=5)
+  N: dist=http://schemas.android.com/apk/distribution (line=5)
+    E: manifest (line=5)
+      A: package="dev.appchk.fixture.bundle" (Raw: "dev.appchk.fixture.bundle")
+      A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=12 (Raw: "12")
+      A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="3.1" (Raw: "3.1")
+      A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37 (Raw: "37")
+      A: platformBuildVersionCode=37 (Raw: "37")
+      A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
+      A: platformBuildVersionName=17 (Raw: "17")
+        T: '\n  '
+        E: uses-sdk (line=10)
+          A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=24 (Raw: "24")
+          A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=35 (Raw: "35")
+        T: '\n  '
+        E: http://schemas.android.com/apk/distribution:module (line=11)
+          A: http://schemas.android.com/apk/distribution:instant=false (Raw: "false")
+        T: '\n  '
+        E: uses-permission (line=12)
+          A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.INTERNET" (Raw: "android.permission.INTERNET")
+        T: '\n  '
+        E: uses-permission (line=13)
+          A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.permission.READ_SMS" (Raw: "android.permission.READ_SMS")
+        T: '\n  '
+        E: application (line=14)
+          A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false (Raw: "false")
+          A: http://schemas.android.com/apk/res/android:label(0x01010001)=@string/app_name (Raw: "@string/app_name")
+          A: http://schemas.android.com/apk/res/android:networkSecurityConfig(0x01010527)=@xml/network_security_config (Raw: "@xml/network_security_config")
+            T: '\n    '
+            E: activity (line=16)
+              A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true (Raw: "true")
+              A: http://schemas.android.com/apk/res/android:name(0x01010003)=".MainActivity" (Raw: ".MainActivity")
+                T: '\n      '
+                E: intent-filter (line=17)
+                    T: '\n        '
+                    E: action (line=18)
+                      A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")
+                    T: '\n        '
+                    E: category (line=19)
+                      A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")
+                    T: '\n      '
+                T: '\n    '
+            T: '\n  '
+        T: '\n'

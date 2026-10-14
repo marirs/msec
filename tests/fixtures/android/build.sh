@@ -1,7 +1,8 @@
 #!/bin/sh
 # Rebuilds the Android fixtures with aapt2 from the Android SDK. Needs ANDROID_HOME (or the
 # default macOS SDK location), build-tools 37.0.0 and platform android-37.0.
-# The DEX fixtures and code.apk have their own script, build_dex.sh (it also needs a JDK).
+# The DEX fixtures and code.apk have their own script, build_dex.sh, and the app bundles and
+# protobuf manifests build_bundle.sh (both also need a JDK).
 set -eu
 cd "$(dirname "$0")"
 sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
