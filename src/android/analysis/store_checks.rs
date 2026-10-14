@@ -37,7 +37,8 @@ pub enum StoreRule {
     VersionCodeOutOfRange,
     /// 32-bit native code without the 64-bit code Google Play requires next to it.
     Missing64BitNativeCode,
-    /// A permission Google Play restricts to eligible apps, with a Play Console declaration.
+    /// A permission Google Play restricts to eligible core uses: Play asks for a declaration
+    /// and approves apps whose use qualifies. Not a rejection by itself.
     RestrictedPermission,
     /// A foreground service type whose permission is not requested: Android 14+ refuses to
     /// start the service.
@@ -61,11 +62,12 @@ impl StoreRule {
         }
     }
 
-    /// Severity on MobSF's scale: refused uploads and crashes are high; declarations are
-    /// warnings.
+    /// Severity on MobSF's scale: refused uploads and crashes are high, an untyped foreground
+    /// service is a warning, and a declaration to file is information.
     pub fn severity(self) -> Severity {
         match self {
-            Self::RestrictedPermission | Self::ForegroundServiceTypeMissing => Severity::Warning,
+            Self::RestrictedPermission => Severity::Info,
+            Self::ForegroundServiceTypeMissing => Severity::Warning,
             _ => Severity::High,
         }
     }
@@ -476,7 +478,9 @@ fn check_restricted_permissions(
                 rule: StoreRule::RestrictedPermission,
                 permission: None,
                 subject: Some(permission.name.clone()),
-                detail: format!("{policy}: Play Console declaration and an eligible core use"),
+                detail: format!(
+                    "{policy}: declare it in Play Console; Play approves eligible core uses"
+                ),
             });
         }
     }

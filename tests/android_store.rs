@@ -63,23 +63,23 @@ fn store_fixture_findings() {
             (
                 "msec_store_restricted_permission",
                 Some("android.permission.QUERY_ALL_PACKAGES"),
-                "Package visibility (QUERY_ALL_PACKAGES): Play Console declaration and an \
-                 eligible core use",
+                "Package visibility (QUERY_ALL_PACKAGES): declare it in Play Console; Play \
+                 approves eligible core uses",
             ),
             (
                 "msec_store_restricted_permission",
                 Some("android.permission.READ_SMS"),
-                "SMS and Call Log permissions: Play Console declaration and an eligible core use",
+                "SMS and Call Log permissions: declare it in Play Console; Play approves eligible core uses",
             ),
             (
                 "msec_store_restricted_permission",
                 Some("android.permission.READ_MEDIA_IMAGES"),
-                "Photo and video permissions: Play Console declaration and an eligible core use",
+                "Photo and video permissions: declare it in Play Console; Play approves eligible core uses",
             ),
             (
                 "msec_store_restricted_permission",
                 Some("android.permission.health.READ_STEPS"),
-                "Health Connect permissions: Play Console declaration and an eligible core use",
+                "Health Connect permissions: declare it in Play Console; Play approves eligible core uses",
             ),
             (
                 "msec_store_restricted_permission",
