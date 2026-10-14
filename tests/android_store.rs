@@ -239,3 +239,33 @@ fn native_libraries_need_64_bit_builds() {
         )]
     );
 }
+
+/// Findings about one service name the permission concerned, so each stays distinct.
+#[test]
+fn service_findings_name_their_permission() {
+    let apk = read(STORE_APK);
+    let permissions: Vec<(StoreRule, Option<String>)> = apk
+        .store_findings(TODAY)
+        .into_iter()
+        .filter(|finding| {
+            finding
+                .subject
+                .as_deref()
+                .is_some_and(|subject| subject.ends_with("Service"))
+        })
+        .map(|finding| (finding.rule, finding.permission))
+        .collect();
+    assert_eq!(
+        permissions,
+        [
+            (
+                StoreRule::RestrictedPermission,
+                Some("android.permission.BIND_ACCESSIBILITY_SERVICE".to_owned())
+            ),
+            (
+                StoreRule::ForegroundServicePermissionMissing,
+                Some("android.permission.FOREGROUND_SERVICE_MICROPHONE".to_owned())
+            ),
+        ]
+    );
+}

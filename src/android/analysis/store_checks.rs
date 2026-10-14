@@ -83,6 +83,10 @@ pub struct StoreFinding {
     pub rule: StoreRule,
     /// What it is about: a permission, a service, an ABI. `None` for app-wide settings.
     pub subject: Option<String>,
+    /// The permission concerned when the subject is a service (the missing foreground service
+    /// permission, or the service's binding permission), so findings about one service stay
+    /// distinct.
+    pub permission: Option<String>,
     /// What triggered it, in words.
     pub detail: String,
 }
@@ -364,6 +368,7 @@ fn check_target_sdk(
     }
     findings.push(StoreFinding {
         rule: StoreRule::TargetSdkBelowPlayRequirement,
+        permission: None,
         subject: None,
         detail,
     });
@@ -376,6 +381,7 @@ fn check_package_name(manifest: &Manifest, findings: &mut Vec<StoreFinding>) {
     if package == "com.example" || package.starts_with("com.example.") {
         findings.push(StoreFinding {
             rule: StoreRule::ExamplePackageName,
+            permission: None,
             subject: None,
             detail: format!("package {package} is in the com.example namespace"),
         });
@@ -393,6 +399,7 @@ fn check_version_code(manifest: &Manifest, findings: &mut Vec<StoreFinding>) {
     };
     findings.push(StoreFinding {
         rule: StoreRule::VersionCodeOutOfRange,
+        permission: None,
         subject: None,
         detail,
     });
@@ -415,6 +422,7 @@ fn check_64_bit_code(inventory: &Inventory, findings: &mut Vec<StoreFinding>) {
         let Some(libraries64) = libraries_of(bits64) else {
             findings.push(StoreFinding {
                 rule: StoreRule::Missing64BitNativeCode,
+                permission: None,
                 subject: Some(bits64.name().to_owned()),
                 detail: format!(
                     "{} libraries in lib/{} and none in lib/{}",
@@ -435,6 +443,7 @@ fn check_64_bit_code(inventory: &Inventory, findings: &mut Vec<StoreFinding>) {
         if !missing.is_empty() {
             findings.push(StoreFinding {
                 rule: StoreRule::Missing64BitNativeCode,
+                permission: None,
                 subject: Some(bits64.name().to_owned()),
                 detail: format!(
                     "lib/{} has no build of {}",
@@ -465,6 +474,7 @@ fn check_restricted_permissions(
         if let Some((_, policy, _)) = restriction {
             findings.push(StoreFinding {
                 rule: StoreRule::RestrictedPermission,
+                permission: None,
                 subject: Some(permission.name.clone()),
                 detail: format!("{policy}: Play Console declaration and an eligible core use"),
             });
@@ -481,6 +491,7 @@ fn check_restricted_permissions(
         if let Some((permission, policy)) = reviewed {
             findings.push(StoreFinding {
                 rule: StoreRule::RestrictedPermission,
+                permission: Some((*permission).to_owned()),
                 subject: Some(service.name.clone()),
                 detail: format!(
                     "{policy}: a service bound with {permission} needs a Play Console declaration"
@@ -529,6 +540,7 @@ fn check_foreground_services(
             };
             findings.push(StoreFinding {
                 rule: StoreRule::ForegroundServicePermissionMissing,
+                permission: Some(permission.to_owned()),
                 subject: Some(service.name.clone()),
                 detail: format!("{what} needs {permission}, which is not requested"),
             });
@@ -537,6 +549,7 @@ fn check_foreground_services(
     if typed_services == 0 && requested(FOREGROUND_SERVICE) {
         findings.push(StoreFinding {
             rule: StoreRule::ForegroundServiceTypeMissing,
+            permission: None,
             subject: None,
             detail: format!(
                 "requests {FOREGROUND_SERVICE}, but none of its {} services declares \
