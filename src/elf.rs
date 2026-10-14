@@ -381,13 +381,14 @@ impl Elf {
             || self.static_symbols.iter().any(|symbol| symbol == name)
     }
 
-    /// File offset of a virtual address, through the `PT_LOAD` segments.
+    /// File offset of a virtual address, through the `PT_LOAD` segments. Segment offsets come
+    /// from the file, so the sum is checked: an offset past `u64::MAX` is no offset.
     fn file_offset(&self, address: u64) -> Option<u64> {
         self.segments
             .iter()
             .filter(|segment| segment.kind == PT_LOAD)
             .find(|segment| address >= segment.vaddr && address - segment.vaddr < segment.file_size)
-            .map(|segment| address - segment.vaddr + segment.offset)
+            .and_then(|segment| (address - segment.vaddr).checked_add(segment.offset))
     }
 
     fn read_segments(&mut self, reader: &Reader<'_>, header: &Header) {
@@ -439,9 +440,12 @@ impl Elf {
                 )
             })
             .collect();
+        // The name table's range comes from the file: it must lie inside it, which also keeps
+        // `offset + name_offset` and `offset + size` below from overflowing.
         let names = raw
             .get(header.section_names_index as usize)
-            .map(|(_, section)| (section.offset, section.size));
+            .map(|(_, section)| (section.offset, section.size))
+            .filter(|&(offset, size)| reader.slice(offset, size).is_some());
         if names.is_none() {
             self.problems.push(ElfProblem::SectionNamesUnreadable);
         }
@@ -565,7 +569,7 @@ impl Elf {
             .dynamic_value(DT_HASH)
             .and_then(|address| self.file_offset(address))
         {
-            return reader.u32(hash + 4).map(u64::from);
+            return reader.u32(hash.checked_add(4)?).map(u64::from);
         }
         let hash = self
             .dynamic_value(DT_GNU_HASH)
@@ -739,22 +743,27 @@ fn read_symbols(
 }
 
 /// Number of dynamic symbols from a GNU hash table: past the highest bucket's chain end.
+/// Every offset here is derived from file values, so each sum is checked.
 fn gnu_hash_symbol_count(reader: &Reader<'_>, at: u64) -> Option<u64> {
     let buckets = u64::from(reader.u32(at)?);
-    let symbol_offset = u64::from(reader.u32(at + 4)?);
-    let bloom_words = u64::from(reader.u32(at + 8)?);
-    let bucket_start = at + 16 + bloom_words.checked_mul(reader.word_size())?;
-    let chain_start = bucket_start + buckets.checked_mul(4)?;
+    let symbol_offset = u64::from(reader.u32(at.checked_add(4)?)?);
+    let bloom_words = u64::from(reader.u32(at.checked_add(8)?)?);
+    let bucket_start = at
+        .checked_add(16)?
+        .checked_add(bloom_words.checked_mul(reader.word_size())?)?;
+    let chain_start = bucket_start.checked_add(buckets.checked_mul(4)?)?;
     let mut highest = 0u64;
     for bucket in 0..buckets.min(MAX_SYMBOLS as u64) {
-        highest = highest.max(u64::from(reader.u32(bucket_start + bucket * 4)?));
+        highest = highest.max(u64::from(
+            reader.u32(bucket_start.checked_add(bucket * 4)?)?,
+        ));
     }
     if highest < symbol_offset {
         return Some(symbol_offset);
     }
     let mut index = highest;
     while index - symbol_offset < MAX_SYMBOLS as u64 {
-        let chain = reader.u32(chain_start + (index - symbol_offset) * 4)?;
+        let chain = reader.u32(chain_start.checked_add((index - symbol_offset) * 4)?)?;
         index += 1;
         if chain & 1 == 1 {
             return Some(index);

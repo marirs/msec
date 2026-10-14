@@ -432,3 +432,54 @@ fn resource_table_mutations_never_panic() {
         }
     }
 }
+
+/// Found by fuzzing: start elements declaring 65,535 overlapping zero-size attributes made a
+/// 64 KB document cost over a gigabyte. A document yields at most as many attributes as it has
+/// room for without overlap; the rest are skipped and reported once.
+#[test]
+fn overlapping_attribute_declarations_stay_within_the_budget() {
+    let mut writer = AxmlWriter::new(&[]);
+    writer.start_namespace();
+    writer.start("manifest", &[]);
+    let feature = writer.string("name");
+    let value = writer.string("android.hardware.camera");
+    for _ in 0..5 {
+        writer.start(
+            "uses-feature",
+            &[Attribute {
+                namespace: None,
+                name: feature,
+                data_type: TYPE_STRING,
+                data: value,
+            }],
+        );
+        writer.end("uses-feature");
+    }
+    writer.end("manifest");
+    let mut bytes = writer.finish();
+    for occurrence in 1..=5 {
+        let position = find_node(&bytes, 0x0102, occurrence);
+        // attributeSize 0, attributeCount 0xffff: every attribute is the same 20 bytes.
+        bytes[position + 16 + 10..position + 16 + 12].copy_from_slice(&0u16.to_le_bytes());
+        bytes[position + 16 + 12..position + 16 + 14].copy_from_slice(&0xffffu16.to_le_bytes());
+    }
+    let document = xml::parse(&bytes).unwrap();
+    let limits = document
+        .anomalies
+        .iter()
+        .filter(|anomaly| anomaly.kind == XmlAnomalyKind::AttributeLimitReached)
+        .count();
+    assert_eq!(limits, 1);
+    let root = document.root.unwrap();
+    let decoded: usize = root
+        .elements()
+        .map(|element| element.attributes.len())
+        .sum();
+    assert_eq!(decoded, xml::attribute_budget(bytes.len()));
+    assert!(
+        decoded < 100,
+        "{decoded} attributes from {} bytes",
+        bytes.len()
+    );
+    assert!(!XmlAnomalyKind::AttributeLimitReached.rejected_by_android());
+}

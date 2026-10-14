@@ -29,6 +29,18 @@ println!("{:?} on {:?}: {}", scan_type, scan_type.platform(), hashes.sha256);
 Supported inputs (recognition and validation): APK, XAPK, APKS, AAB, JAR, AAR, SO, source ZIP,
 IPA, DYLIB, A. APPX is recognised but not analysed.
 
+## Fuzzing
+
+Every parser of untrusted input has a [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)
+target in `fuzz/`: the ZIP reader (`archive`), binary XML with the manifest and network
+security models (`binary_xml`), the resource table (`resource_table`), ELF with hardening
+(`elf`), X.509 certificates (`certificate`) and a whole APK through every analysis (`apk`).
+Seeds come from this repository's fixtures. `scripts/fuzz.sh` runs each for a time budget (60
+seconds by default; `FUZZ_SECONDS=600 scripts/fuzz.sh apk` for more) with a 10-second per-input
+timeout and a 2 GB memory limit; CI runs it on every change and daily. It needs a nightly
+toolchain and `cargo install cargo-fuzz`. Inputs that once crashed are kept as regression tests
+under `tests/fixtures/fuzz/`.
+
 ## Roadmap
 
 Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed corpus:

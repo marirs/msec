@@ -265,3 +265,13 @@ fn fixture_libraries_parse_like_object() {
         assert_eq!(msec_summary(&bytes), object_summary(&bytes), "{name}");
     }
 }
+
+/// Inputs fuzzing found crashing (`fuzz/`), kept as regressions. Overflow checks are on in
+/// test builds, so an unchecked sum of file values panics here.
+#[test]
+fn fuzz_regressions_parse_without_panicking() {
+    let section_names_overflow = include_bytes!("fixtures/fuzz/elf-section-names-overflow.bin");
+    if let Ok(elf) = Elf::parse(section_names_overflow) {
+        let _ = msec::android::native::Hardening::of(&elf);
+    }
+}

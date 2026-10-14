@@ -125,6 +125,18 @@ pub fn verify_jar<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Option<JarSign
     })
 }
 
+/// `text` without `suffix`, compared ignoring ASCII case. Entry names and attribute keys come
+/// from the package and may hold multibyte characters, where cutting at `len - suffix.len()`
+/// could split one: the bytes are compared first, and a match with an ASCII suffix makes the cut
+/// a character boundary.
+fn strip_suffix_ignore_ascii_case<'text>(text: &'text str, suffix: &str) -> Option<&'text str> {
+    let cut = text.len().checked_sub(suffix.len())?;
+    text.as_bytes()[cut..]
+        .eq_ignore_ascii_case(suffix.as_bytes())
+        .then(|| text.get(..cut))
+        .flatten()
+}
+
 fn unverified_signer(name: String) -> JarSigner {
     JarSigner {
         name,
@@ -150,12 +162,7 @@ fn signature_files<R: Read + Seek>(archive: &ZipArchive<R>) -> Vec<(String, Stri
         else {
             continue;
         };
-        let Some(base) = file
-            .len()
-            .checked_sub(3)
-            .filter(|&cut| file[cut..].eq_ignore_ascii_case(".SF"))
-            .map(|cut| &file[..cut])
-        else {
+        let Some(base) = strip_suffix_ignore_ascii_case(file, ".SF") else {
             continue;
         };
         let block = ["RSA", "DSA", "EC"]
@@ -524,11 +531,7 @@ fn digest_attributes(section: &ManifestSection<'_>, suffix: &str) -> Vec<(Hash, 
         .attributes
         .iter()
         .filter_map(|(key, value)| {
-            let algorithm = key
-                .len()
-                .checked_sub(suffix.len())
-                .filter(|&cut| key[cut..].eq_ignore_ascii_case(suffix))
-                .map(|cut| &key[..cut])?;
+            let algorithm = strip_suffix_ignore_ascii_case(key, suffix)?;
             let hash = match algorithm.to_ascii_uppercase().as_str() {
                 "SHA1" | "SHA-1" => Hash::Sha1,
                 "SHA-256" => Hash::Sha256,
@@ -792,5 +795,24 @@ mod tests {
     fn garbage_blocks_do_not_parse() {
         assert!(Pkcs7::parse(b"").is_none());
         assert!(Pkcs7::parse(&[0x30, 0x84, 0xff, 0xff, 0xff, 0xff]).is_none());
+    }
+
+    #[test]
+    fn suffixes_are_stripped_without_splitting_characters() {
+        assert_eq!(
+            strip_suffix_ignore_ascii_case("CERT.sf", ".SF"),
+            Some("CERT")
+        );
+        assert_eq!(
+            strip_suffix_ignore_ascii_case("SHA-256-Digest", "-Digest"),
+            Some("SHA-256")
+        );
+        // The cut would fall inside the 3-byte U+FFFD: no panic, no match.
+        assert_eq!(strip_suffix_ignore_ascii_case("\u{fffd}x", ".SF"), None);
+        assert_eq!(
+            strip_suffix_ignore_ascii_case("\u{fffd}abcdef", "-Digest"),
+            None
+        );
+        assert_eq!(strip_suffix_ignore_ascii_case("SF", ".SF"), None);
     }
 }

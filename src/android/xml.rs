@@ -30,6 +30,13 @@ const START_ELEMENT_EXTENSION_LENGTH: usize = 20;
 const NO_STRING: u32 = u32::MAX;
 /// Deeper elements are skipped. Real manifests nest about six levels.
 const MAX_DEPTH: usize = 256;
+/// The most attributes decoded from a document of `length` bytes: as many as it could hold
+/// without overlapping records. A start element may declare an attribute size below 20 bytes
+/// (AOSP `validateNode` allows it; the records then overlap), so 36 bytes can declare 65,535
+/// attributes. Documents with non-overlapping records never reach this bound.
+pub fn attribute_budget(length: usize) -> usize {
+    length / ATTRIBUTE_LENGTH
+}
 
 /// A decoded binary XML document.
 #[derive(Debug, Clone, PartialEq)]
@@ -207,6 +214,9 @@ pub enum XmlAnomalyKind {
     MultipleRootElements,
     /// Elements nested deeper than msec follows were skipped.
     DepthLimitReached,
+    /// Overlapping attribute records declare more attributes than the document has room for
+    /// ([`attribute_budget`]); the rest were skipped. Android reads them all.
+    AttributeLimitReached,
 }
 
 /// How a node is malformed.
@@ -272,6 +282,7 @@ pub fn parse(bytes: &[u8]) -> Result<XmlDocument, XmlError> {
         prologue: &prologue,
         anomalies,
         misaligned_reported: false,
+        attributes_left: attribute_budget(bytes.len()),
     };
     let mut builder = TreeBuilder::default();
     if let Some(first_node) = prologue.first_node {
@@ -397,6 +408,8 @@ struct NodeReader<'data> {
     prologue: &'data Prologue,
     anomalies: Vec<XmlAnomaly>,
     misaligned_reported: bool,
+    /// Attributes still to decode before [`attribute_budget`] is spent.
+    attributes_left: usize,
 }
 
 impl NodeReader<'_> {
@@ -493,6 +506,11 @@ impl NodeReader<'_> {
         if block_end > extension.len() {
             return Err(MalformedNode::AttributesOutOfBounds);
         }
+        if attribute_count > self.attributes_left && self.attributes_left > 0 {
+            self.anomaly(XmlAnomalyKind::AttributeLimitReached, chunk.offset);
+        }
+        let attribute_count = attribute_count.min(self.attributes_left);
+        self.attributes_left -= attribute_count;
         let mut attributes = Vec::with_capacity(attribute_count);
         for index in 0..attribute_count {
             let start = attribute_start + index * attribute_size;

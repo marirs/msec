@@ -1,0 +1,61 @@
+# cargo-fuzz targets for msec's parsers (AT-ARC-016). Not part of the published crate.
+# Run one: cargo +nightly fuzz run archive -- -max_total_time=60
+# Seeds live in fuzz/seeds/<target>; scripts/fuzz.sh runs every target for a time budget.
+[package]
+name = "msec-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Its own workspace, so building it never touches msec's.
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4.10"
+msec = { path = ".." }
+
+[[bin]]
+name = "archive"
+path = "fuzz_targets/archive.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "binary_xml"
+path = "fuzz_targets/binary_xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "resource_table"
+path = "fuzz_targets/resource_table.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "elf"
+path = "fuzz_targets/elf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "certificate"
+path = "fuzz_targets/certificate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "apk"
+path = "fuzz_targets/apk.rs"
+test = false
+doc = false
+bench = false

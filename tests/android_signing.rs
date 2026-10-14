@@ -342,3 +342,13 @@ fn signing_findings_per_fixture() {
         rows(&[("signed_application", "v2, v3")])
     );
 }
+
+/// Inputs fuzzing found crashing (`fuzz/`), kept as regressions: a `META-INF/` entry name whose
+/// last three bytes split a multibyte character.
+#[test]
+fn fuzz_regressions_read_without_panicking() {
+    let jar_name = include_bytes!("fixtures/fuzz/apk-jar-name-char-boundary.bin");
+    if let Ok(mut archive) = ZipArchive::open(Cursor::new(jar_name.to_vec()), Limits::default()) {
+        let _ = SigningReport::read(&mut archive);
+    }
+}

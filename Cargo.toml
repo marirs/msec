@@ -9,7 +9,7 @@ repository = "https://github.com/marirs/msec"
 readme = "README.md"
 keywords = ["security", "android", "ios", "mobsf", "sast"]
 categories = ["development-tools", "parser-implementations"]
-exclude = [".github/"]
+exclude = [".github/", "fuzz/"]
 
 [dependencies]
 crc32fast = "1.5.2"

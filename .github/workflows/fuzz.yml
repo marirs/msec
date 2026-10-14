@@ -1,0 +1,35 @@
+name: fuzz
+
+# AT-ARC-016: every parser target runs for a fixed time budget with no panic, hang (10 s per
+# input) or memory blow-up (2 GB). Daily and on every change, so new inputs keep being tried.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Actions are pinned to commit SHAs; the comment names the release.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Nightly toolchain and cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo install cargo-fuzz --locked --version 0.13.2
+      - name: Fuzz every target for 60 seconds
+        run: FUZZ_SECONDS=60 scripts/fuzz.sh
+      - name: Show failing inputs
+        if: failure()
+        run: |
+          for input in fuzz/artifacts/*/*; do
+            [ -f "$input" ] || continue
+            echo "== $input"
+            od -A x -t x1z "$input" | head -64
+          done
