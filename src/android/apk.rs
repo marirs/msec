@@ -4,7 +4,8 @@ use std::io::{Read, Seek};
 
 use super::analysis::{
     ManifestFinding, NativeFinding, NetworkFinding, NetworkSecurityConfig, SigningFinding,
-    analyse_manifest, analyse_native, analyse_network_security, analyse_signing,
+    StoreFinding, analyse_manifest, analyse_native, analyse_network_security, analyse_signing,
+    analyse_store,
 };
 use super::inventory::Inventory;
 use super::manifest::Manifest;
@@ -153,6 +154,15 @@ impl Apk {
     /// Native library findings.
     pub fn native_findings(&self) -> Vec<NativeFinding> {
         analyse_native(&self.native_libraries)
+    }
+
+    /// Google Play store-readiness findings; `today` (`yyyy-MM-dd`) picks the target API
+    /// requirement in force. Empty when the manifest could not be decoded.
+    pub fn store_findings(&self, today: &str) -> Vec<StoreFinding> {
+        self.manifest
+            .as_ref()
+            .map(|manifest| analyse_store(manifest, &self.inventory, today))
+            .unwrap_or_default()
     }
 
     /// Network security configuration findings, with expiry dates compared to `today`

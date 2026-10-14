@@ -70,7 +70,7 @@ fn dump_element(out: &mut String, element: &XmlElement, indent: usize) {
 
 #[test]
 fn binary_manifests_decode_exactly_like_aapt2() {
-    let fixtures: [(&[u8], &str); 3] = [
+    let fixtures: [(&[u8], &str); 4] = [
         (BASIC_APK, BASIC_XMLTREE),
         (
             include_bytes!("fixtures/android/risky.apk"),
@@ -79,6 +79,10 @@ fn binary_manifests_decode_exactly_like_aapt2() {
         (
             include_bytes!("fixtures/android/network.apk"),
             include_str!("fixtures/android/network.xmltree.txt"),
+        ),
+        (
+            include_bytes!("fixtures/android/store.apk"),
+            include_str!("fixtures/android/store.xmltree.txt"),
         ),
     ];
     for (apk, xmltree) in fixtures {

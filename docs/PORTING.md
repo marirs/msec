@@ -31,6 +31,7 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 1 | Manifest analysis and network security configuration analysis (`msec::android::analysis`) | Done |
 | 1 | Signing: v1/v2/v3/v3.1 parsing and full verification, certificates, signing checks (`msec::android::signing`, `analysis::signing_checks`) | Done |
 | 1 | Native libraries: ELF parser, hardening checks, Android loading and 16 KB page checks (`msec::elf`, `msec::android::native`, `analysis::native_checks`) | Done |
+| 1 | Google Play store readiness on the manifest and package layout (`analysis::store_checks`, msec origin) | Done |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
 | 4 | Malware: domain lists, IP2Location reader, APKiD rules via yara-x, VirusTotal (opt-in) | Planned |
@@ -74,4 +75,5 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 22 | Full RELRO requires `DF_BIND_NOW` or `DF_1_NOW` | `DT_BIND_NOW` also counts (same meaning) |
 | 23 | Dart detection also scans the binary's strings for the snapshot symbol names | Symbols only (dynamic and static) |
 | 24 | Not checked | Added (msec origin): text relocations (Android 6.0+ refuses them), DWARF debug sections, 64-bit libraries aligned for 4 KB pages only (Google Play's 16 KB requirement), uncompressed libraries not page-aligned in the APK |
+| 25 | Not checked | Added (msec origin): Google Play store readiness, `analysis::store_checks`. Target API level below Play's requirement for the app's form factor, from a dated table (2025 and 2026 requirements, extension window, existing-app threshold); `com.example` package names; `versionCode` missing, 0 or above 2100000000; 32-bit native code without 64-bit builds; permissions Play restricts to eligible apps with a declaration (SMS and Call Log, QUERY_ALL_PACKAGES, All files access, REQUEST_INSTALL_PACKAGES, background location, exact alarms, full-screen intents, photo and video, Health Connect, accessibility and VPN services); foreground services for apps targeting API 34+: each declared type's permission, and services used without any type. `Component::foreground_service_type` was added to the manifest model for this |
 | 8 | Permission protection levels come from MobSF's bundled table | Generated from AOSP's framework manifest (`tools/generate_android_data.py`), with Android's own user-facing labels |

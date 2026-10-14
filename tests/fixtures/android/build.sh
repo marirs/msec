@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 aapt2="$sdk/build-tools/37.0.0/aapt2"
 platform="$sdk/platforms/android-37.0/android.jar"
-for fixture in basic risky network; do
+for fixture in basic risky network store; do
   work="$(mktemp -d)"
   "$aapt2" compile --dir "$fixture/res" -o "$work/res.zip"
   "$aapt2" link -I "$platform" --manifest "$fixture/AndroidManifest.xml" -o "$fixture.apk" "$work/res.zip"

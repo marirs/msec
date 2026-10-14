@@ -10,6 +10,7 @@ use super::xml::{XmlDocument, XmlElement};
 /// Framework attribute resource IDs (`android.R.attr`). Checked against the generated table
 /// from the Android SDK in this module's tests.
 pub(crate) mod attr {
+    pub(crate) const FOREGROUND_SERVICE_TYPE: u32 = 0x0101_0599;
     pub(crate) const LABEL: u32 = 0x0101_0001;
     pub(crate) const ICON: u32 = 0x0101_0002;
     pub(crate) const NAME: u32 = 0x0101_0003;
@@ -405,6 +406,95 @@ pub struct Component {
     pub intent_filters: Vec<IntentFilter>,
     /// Meta-data.
     pub meta_data: Vec<MetaData>,
+    /// Service `android:foregroundServiceType` flags; see [`foreground_service_types`].
+    pub foreground_service_type: Option<u32>,
+}
+
+/// `android:foregroundServiceType` flags (`attrs_manifest.xml`, Android 16 SDK): the flag, its
+/// name, and the permission an app targeting Android 14 (API 34) or later must request to
+/// start a foreground service of that type (`shortService` needs none).
+pub const FOREGROUND_SERVICE_TYPES: [(u32, &str, Option<&str>); 15] = [
+    (
+        0x01,
+        "dataSync",
+        Some("android.permission.FOREGROUND_SERVICE_DATA_SYNC"),
+    ),
+    (
+        0x02,
+        "mediaPlayback",
+        Some("android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"),
+    ),
+    (
+        0x04,
+        "phoneCall",
+        Some("android.permission.FOREGROUND_SERVICE_PHONE_CALL"),
+    ),
+    (
+        0x08,
+        "location",
+        Some("android.permission.FOREGROUND_SERVICE_LOCATION"),
+    ),
+    (
+        0x10,
+        "connectedDevice",
+        Some("android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"),
+    ),
+    (
+        0x20,
+        "mediaProjection",
+        Some("android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"),
+    ),
+    (
+        0x40,
+        "camera",
+        Some("android.permission.FOREGROUND_SERVICE_CAMERA"),
+    ),
+    (
+        0x80,
+        "microphone",
+        Some("android.permission.FOREGROUND_SERVICE_MICROPHONE"),
+    ),
+    (
+        0x100,
+        "health",
+        Some("android.permission.FOREGROUND_SERVICE_HEALTH"),
+    ),
+    (
+        0x200,
+        "remoteMessaging",
+        Some("android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"),
+    ),
+    (
+        0x400,
+        "systemExempted",
+        Some("android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"),
+    ),
+    (0x800, "shortService", None),
+    (
+        0x1000,
+        "fileManagement",
+        Some("android.permission.FOREGROUND_SERVICE_FILE_MANAGEMENT"),
+    ),
+    (
+        0x2000,
+        "mediaProcessing",
+        Some("android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING"),
+    ),
+    (
+        0x4000_0000,
+        "specialUse",
+        Some("android.permission.FOREGROUND_SERVICE_SPECIAL_USE"),
+    ),
+];
+
+/// `(name, required permission)` of each type set in `flags`, in flag order. Unknown bits are
+/// ignored: a newer SDK may add types this table does not know yet.
+pub fn foreground_service_types(flags: u32) -> Vec<(&'static str, Option<&'static str>)> {
+    FOREGROUND_SERVICE_TYPES
+        .iter()
+        .filter(|(flag, _, _)| flags & flag != 0)
+        .map(|(_, name, permission)| (*name, *permission))
+        .collect()
 }
 
 impl Component {
@@ -882,6 +972,9 @@ fn read_component(element: &XmlElement, kind: ComponentKind) -> Option<Component
             .elements_named("meta-data")
             .filter_map(read_meta_data)
             .collect(),
+        // Flags fit in 32 bits (`specialUse` is 0x40000000); anything else is not a type set.
+        foreground_service_type: integer(element, attr::FOREGROUND_SERVICE_TYPE)
+            .and_then(|flags| u32::try_from(flags).ok()),
     })
 }
 
@@ -935,6 +1028,7 @@ mod tests {
     #[test]
     fn attribute_constants_match_the_sdk() {
         let expected = [
+            (attr::FOREGROUND_SERVICE_TYPE, "foregroundServiceType"),
             (attr::LABEL, "label"),
             (attr::ICON, "icon"),
             (attr::NAME, "name"),
@@ -1032,5 +1126,33 @@ mod tests {
             SdkLevel::from_value(&Value::String(Some("Baklava".into()))),
             Some(SdkLevel::Codename("Baklava".into()))
         );
+    }
+
+    #[test]
+    fn foreground_service_types_decode_flags_and_permissions() {
+        assert_eq!(
+            foreground_service_types(0x40 | 0x800 | 0x4000_0000),
+            [
+                (
+                    "camera",
+                    Some("android.permission.FOREGROUND_SERVICE_CAMERA")
+                ),
+                ("shortService", None),
+                (
+                    "specialUse",
+                    Some("android.permission.FOREGROUND_SERVICE_SPECIAL_USE")
+                ),
+            ]
+        );
+        assert!(foreground_service_types(0).is_empty());
+        // Every required permission is a framework permission of the SDK msec knows.
+        for (_, name, permission) in FOREGROUND_SERVICE_TYPES {
+            if let Some(permission) = permission {
+                assert!(
+                    crate::android::permissions::framework_permission(permission).is_some(),
+                    "{name}: {permission}"
+                );
+            }
+        }
     }
 }

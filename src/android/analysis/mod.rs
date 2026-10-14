@@ -9,6 +9,7 @@ pub mod manifest_checks;
 pub mod native_checks;
 pub mod network;
 pub mod signing_checks;
+pub mod store_checks;
 
 pub use manifest_checks::{
     ExportReason, ManifestFinding, ManifestRule, PermissionLevel, Protection, analyse_manifest,
@@ -16,6 +17,7 @@ pub use manifest_checks::{
 pub use native_checks::{NativeFinding, NativeRule, analyse_native};
 pub use network::{NetworkFinding, NetworkRule, NetworkSecurityConfig, analyse_network_security};
 pub use signing_checks::{SigningFinding, SigningRule, analyse_signing};
+pub use store_checks::{FormFactor, StoreFinding, StoreRule, analyse_store};
 
 /// MobSF's severity levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
