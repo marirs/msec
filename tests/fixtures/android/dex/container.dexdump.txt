@@ -1,0 +1,94 @@
+DEX file header:
+magic               : 'dex\n041\0'
+checksum            : c6a3250b
+signature           : a476...a5e1
+container_size      : 588
+file_size           : 316
+header_size         : 120
+header_off          : 0 (0x000000)
+link_size           : 0
+link_off            : 0 (0x000000)
+string_ids_size     : 3
+string_ids_off      : 120 (0x000078)
+type_ids_size       : 3
+type_ids_off        : 132 (0x000084)
+proto_ids_size      : 0
+proto_ids_off       : 0 (0x000000)
+field_ids_size      : 0
+field_ids_off       : 0 (0x000000)
+method_ids_size     : 0
+method_ids_off      : 0 (0x000000)
+class_defs_size     : 2
+class_defs_off      : 144 (0x000090)
+data_size           : 0
+data_off            : 0 (0x000000)
+
+
+Displaying 3 strings from string_ids:
+  string[000000] - 'LA;'
+  string[000001] - 'LB;'
+  string[000002] - 'Ljava/lang/Object;'
+
+Class #0            -
+  Class descriptor  : 'LA;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+  Virtual methods   -
+  source_file_idx   : -1
+
+Class #1            -
+  Class descriptor  : 'LB;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'LA;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+  Virtual methods   -
+  source_file_idx   : -1
+
+DEX file header:
+magic               : 'dex\n041\0'
+checksum            : 4cf51d20
+signature           : c3d9...5e79
+container_size      : 588
+file_size           : 272
+header_size         : 120
+header_off          : 316 (0x00013c)
+link_size           : 0
+link_off            : 0 (0x000000)
+string_ids_size     : 2
+string_ids_off      : 436 (0x0001b4)
+type_ids_size       : 2
+type_ids_off        : 444 (0x0001bc)
+proto_ids_size      : 0
+proto_ids_off       : 0 (0x000000)
+field_ids_size      : 0
+field_ids_off       : 0 (0x000000)
+method_ids_size     : 0
+method_ids_off      : 0 (0x000000)
+class_defs_size     : 1
+class_defs_off      : 452 (0x0001c4)
+data_size           : 0
+data_off            : 0 (0x000000)
+
+
+Displaying 2 strings from string_ids:
+  string[000000] - 'LC;'
+  string[000001] - 'Ljava/lang/Object;'
+
+Class #0            -
+  Class descriptor  : 'LC;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+  Virtual methods   -
+  source_file_idx   : -1
+

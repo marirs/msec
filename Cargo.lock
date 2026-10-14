@@ -346,6 +346,7 @@ dependencies = [
 name = "msec"
 version = "0.0.1"
 dependencies = [
+ "adler2",
  "crc32fast",
  "der",
  "dsa",

@@ -1,6 +1,6 @@
 //! A whole APK read from arbitrary bytes: archive, manifest, resources, network security
-//! configuration, signatures (APK Signing Block, v1 PKCS#7), native libraries, then every
-//! analysis.
+//! configuration, signatures (APK Signing Block, v1 PKCS#7), native libraries, DEX files, then
+//! every analysis.
 #![no_main]
 
 use std::io::Cursor;
@@ -21,4 +21,5 @@ fuzz_target!(|data: &[u8]| {
     let _ = apk.signing_findings(TODAY);
     let _ = apk.native_findings();
     let _ = apk.store_findings(TODAY);
+    let _ = apk.code_summary();
 });

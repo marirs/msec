@@ -54,6 +54,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "dex"
+path = "fuzz_targets/dex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "apk"
 path = "fuzz_targets/apk.rs"
 test = false

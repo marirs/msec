@@ -19,6 +19,8 @@
 //!   permission and SDK level data.
 //! - [`android::signing`]: v1/v2/v3/v3.1 signature verification and signer certificates.
 //! - [`elf`] and [`android::native`]: native libraries and their hardening.
+//! - [`android::dex`]: DEX files (compiled code) in the order Android loads them: strings,
+//!   types and class definitions, with the structural problems ART rejects.
 //!
 //! Android manifest, certificate, network-security-config and binary analysis follow in the
 //! next releases. See the repository README for the porting roadmap.

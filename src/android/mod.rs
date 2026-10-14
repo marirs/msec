@@ -3,6 +3,7 @@
 pub mod analysis;
 mod apk;
 mod chunk;
+pub mod dex;
 mod generated;
 pub mod inventory;
 pub mod manifest;

@@ -12,6 +12,7 @@ categories = ["development-tools", "parser-implementations"]
 exclude = [".github/", "fuzz/"]
 
 [dependencies]
+adler2 = "2.0.1"
 crc32fast = "1.5.2"
 der = { version = "0.8.2", features = ["derive", "oid"] }
 dsa = "0.7.0"

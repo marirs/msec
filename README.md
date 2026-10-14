@@ -34,7 +34,8 @@ IPA, DYLIB, A. APPX is recognised but not analysed.
 Every parser of untrusted input has a [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)
 target in `fuzz/`: the ZIP reader (`archive`), binary XML with the manifest and network
 security models (`binary_xml`), the resource table (`resource_table`), ELF with hardening
-(`elf`), X.509 certificates (`certificate`) and a whole APK through every analysis (`apk`).
+(`elf`), X.509 certificates (`certificate`), DEX files (`dex`) and a whole APK through every
+analysis (`apk`).
 Seeds come from this repository's fixtures. `scripts/fuzz.sh` runs each for a time budget (60
 seconds by default; `FUZZ_SECONDS=600 scripts/fuzz.sh apk` for more) with a 10-second per-input
 timeout and a 2 GB memory limit; CI runs it on every change and daily. It needs a nightly
@@ -49,7 +50,8 @@ Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed 
    rule-engine regex compatibility layer.
 2. Android without a decompiler: binary XML and resource table decoding, manifest data and
    permissions, manifest analysis, network security config, certificate and signature
-   verification, ELF checks, Google Play store readiness (done).
+   verification, ELF checks, Google Play store readiness, a DEX reader for the class and string
+   inventory (done).
 3. Code rules and strings: a libsast-compatible pattern engine over decompiled sources (jadx as an
    optional external tool), strings and secrets, trackers, SBOM, scorecard.
 4. iOS: plist, ATS and permissions, Mach-O checks, Objective-C metadata, IPA binary rules.

@@ -7,6 +7,7 @@ use super::analysis::{
     StoreFinding, analyse_manifest, analyse_native, analyse_network_security, analyse_signing,
     analyse_store,
 };
+use super::dex::{CodeSummary, DexEntry, read_dex_files, summarise};
 use super::inventory::Inventory;
 use super::manifest::Manifest;
 use super::native::{NativeLibrary, read_native_libraries};
@@ -46,6 +47,8 @@ pub struct Apk {
     pub signing: SigningReport,
     /// Every `.so` in the APK, parsed, with its hardening.
     pub native_libraries: Vec<NativeLibrary>,
+    /// The root `classes*.dex` files, in the order Android loads them.
+    pub dex_files: Vec<DexEntry>,
 }
 
 impl Apk {
@@ -89,7 +92,9 @@ impl Apk {
             network_security_config: None,
             signing: SigningReport::read(archive),
             native_libraries: read_native_libraries(archive),
+            dex_files: Vec::new(),
         };
+        apk.dex_files = read_dex_files(archive, &apk.inventory.dex_files);
         apk.network_security_config = apk.read_network_security_config(archive);
         apk
     }
@@ -149,6 +154,11 @@ impl Apk {
         let min_sdk = manifest.and_then(Manifest::min_sdk).unwrap_or(1);
         let target_sdk = manifest.and_then(Manifest::target_sdk).unwrap_or(min_sdk);
         analyse_signing(&self.signing, min_sdk, target_sdk, today)
+    }
+
+    /// What the DEX files hold together: classes, packages, shadowed classes.
+    pub fn code_summary(&self) -> CodeSummary {
+        summarise(&self.dex_files)
     }
 
     /// Native library findings.
