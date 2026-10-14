@@ -30,7 +30,7 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 1 | Binary XML and resource table decoders, manifest model, permission and attribute data (`msec::android`) | Done |
 | 1 | Manifest analysis and network security configuration analysis (`msec::android::analysis`) | Done |
 | 1 | Signing: v1/v2/v3/v3.1 parsing and full verification, certificates, signing checks (`msec::android::signing`, `analysis::signing_checks`) | Done |
-| 1 | ELF checks | Next |
+| 1 | Native libraries: ELF parser, hardening checks, Android loading and 16 KB page checks (`msec::elf`, `msec::android::native`, `analysis::native_checks`) | Done |
 | 2 | libsast-compatible pattern engine on decompiled sources; strings, secrets, entropy; trackers (Exodus); SBOM; report assembly, suppression, scorecard | Planned |
 | 3 | iOS: plist, ATS, permissions; Mach-O checks; Objective-C and Swift metadata; IPA binary rules; iOS source zips | Planned |
 | 4 | Malware: domain lists, IP2Location reader, APKiD rules via yara-x, VirusTotal (opt-in) | Planned |
@@ -70,4 +70,8 @@ upstream (modules, rules, data files, report keys, network calls, quirks) is in
 | 18 | Janus: any v1 signature with a known minimum SDK is high; v1 with v2/v3 is a warning below Android 8.1 and high otherwise | v1 only: high when the app installs below Android 8.1; v1 with v2/v3: warning when it installs below Android 7.0 (the only releases that check v1 alone); nothing otherwise |
 | 19 | Not checked | Added (msec origin): signatures that do not verify, Android releases in the app's range that would reject it (missing scheme, stripped v3, stripped v2 via `X-Android-APK-Signed`), RSA keys below 2048 bits, v1-only APKs targeting Android 11+, expired signer certificates (info) |
 | 20 | Certificate details via asn1crypto (`get_cert_details`) | Same fields from `x509-cert`; the public key fingerprint is SHA-256 of the DER `SubjectPublicKeyInfo` (MobSF hashes a text rendering of the key numbers) |
+| 21 | ELF parsed with LIEF; stripped-symbol check falls back to the host `nm` | In-house bounds-checked ELF parser (cross-checked against the `object` crate on 31 real NDK libraries); security properties from program headers and the dynamic segment, which is what Android's linker uses, so stripped or corrupted section headers do not hide them; dynamic symbols found through `DT_HASH`/`DT_GNU_HASH` when sections are missing |
+| 22 | Full RELRO requires `DF_BIND_NOW` or `DF_1_NOW` | `DT_BIND_NOW` also counts (same meaning) |
+| 23 | Dart detection also scans the binary's strings for the snapshot symbol names | Symbols only (dynamic and static) |
+| 24 | Not checked | Added (msec origin): text relocations (Android 6.0+ refuses them), DWARF debug sections, 64-bit libraries aligned for 4 KB pages only (Google Play's 16 KB requirement), uncompressed libraries not page-aligned in the APK |
 | 8 | Permission protection levels come from MobSF's bundled table | Generated from AOSP's framework manifest (`tools/generate_android_data.py`), with Android's own user-facing labels |

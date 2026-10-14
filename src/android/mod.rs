@@ -6,6 +6,7 @@ mod chunk;
 mod generated;
 pub mod inventory;
 pub mod manifest;
+pub mod native;
 pub mod permissions;
 pub mod resources;
 pub mod sdk;

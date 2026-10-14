@@ -6,12 +6,14 @@
 //! not have are marked [`Origin::Msec`]. Deviations are listed in `docs/PORTING.md`.
 
 pub mod manifest_checks;
+pub mod native_checks;
 pub mod network;
 pub mod signing_checks;
 
 pub use manifest_checks::{
     ExportReason, ManifestFinding, ManifestRule, PermissionLevel, Protection, analyse_manifest,
 };
+pub use native_checks::{NativeFinding, NativeRule, analyse_native};
 pub use network::{NetworkFinding, NetworkRule, NetworkSecurityConfig, analyse_network_security};
 pub use signing_checks::{SigningFinding, SigningRule, analyse_signing};
 

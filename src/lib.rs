@@ -17,6 +17,8 @@
 //! - [`android::Apk`]: the manifest and resource table decoded the way Android decodes them
 //!   ([`android::xml`], [`android::resources`], [`android::manifest`]), with framework
 //!   permission and SDK level data.
+//! - [`android::signing`]: v1/v2/v3/v3.1 signature verification and signer certificates.
+//! - [`elf`] and [`android::native`]: native libraries and their hardening.
 //!
 //! Android manifest, certificate, network-security-config and binary analysis follow in the
 //! next releases. See the repository README for the porting roadmap.
@@ -25,6 +27,7 @@
 
 pub mod android;
 pub mod archive;
+pub mod elf;
 pub mod hashes;
 pub mod magic;
 pub mod scan_type;

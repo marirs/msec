@@ -33,6 +33,8 @@ x509-cert = { version = "0.3.0", default-features = false }
 # Independent writer for cross-checking the reader; pure-Rust deflate only.
 crc32fast = "1.5.2"
 flate2 = "1.1.10"
+# Independent ELF parser for cross-checking msec's.
+object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "std"] }
 zip = { version = "9.0.2", default-features = false, features = ["deflate-flate2"] }
 
 [lints.rust]

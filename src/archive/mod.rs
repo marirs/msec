@@ -78,6 +78,11 @@ impl Entry {
         self.data_offset.is_some()
     }
 
+    /// File offset of the entry's data, when its local header could be located.
+    pub fn data_offset(&self) -> Option<u64> {
+        self.data_offset
+    }
+
     /// A readable stored file entry, for unit tests of analyses that only look at names and
     /// sizes.
     #[cfg(test)]

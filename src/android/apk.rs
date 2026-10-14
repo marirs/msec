@@ -3,11 +3,12 @@
 use std::io::{Read, Seek};
 
 use super::analysis::{
-    ManifestFinding, NetworkFinding, NetworkSecurityConfig, SigningFinding, analyse_manifest,
-    analyse_network_security, analyse_signing,
+    ManifestFinding, NativeFinding, NetworkFinding, NetworkSecurityConfig, SigningFinding,
+    analyse_manifest, analyse_native, analyse_network_security, analyse_signing,
 };
 use super::inventory::Inventory;
 use super::manifest::Manifest;
+use super::native::{NativeLibrary, read_native_libraries};
 use super::resources::ResourceTable;
 use super::signing::SigningReport;
 use super::value::Value;
@@ -42,6 +43,8 @@ pub struct Apk {
     pub network_security_config: Option<Result<NetworkSecurityConfig, String>>,
     /// Signatures, verified.
     pub signing: SigningReport,
+    /// Every `.so` in the APK, parsed, with its hardening.
+    pub native_libraries: Vec<NativeLibrary>,
 }
 
 impl Apk {
@@ -84,6 +87,7 @@ impl Apk {
             locales,
             network_security_config: None,
             signing: SigningReport::read(archive),
+            native_libraries: read_native_libraries(archive),
         };
         apk.network_security_config = apk.read_network_security_config(archive);
         apk
@@ -144,6 +148,11 @@ impl Apk {
         let min_sdk = manifest.and_then(Manifest::min_sdk).unwrap_or(1);
         let target_sdk = manifest.and_then(Manifest::target_sdk).unwrap_or(min_sdk);
         analyse_signing(&self.signing, min_sdk, target_sdk, today)
+    }
+
+    /// Native library findings.
+    pub fn native_findings(&self) -> Vec<NativeFinding> {
+        analyse_native(&self.native_libraries)
     }
 
     /// Network security configuration findings, with expiry dates compared to `today`

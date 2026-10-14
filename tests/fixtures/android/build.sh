@@ -16,3 +16,5 @@ done
 # Signed variants of basic.apk (fresh keys each run; tests check structure, not key values).
 mkdir -p signed
 python3 -I sign_fixtures.py basic.apk signed
+# Native libraries with chosen hardening, and an APK with aligned and misaligned stored libraries.
+python3 -I make_elf_fixtures.py basic.apk native
