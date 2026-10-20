@@ -101,3 +101,10 @@ path = "fuzz_targets/ipa.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "macho"
+path = "fuzz_targets/macho.rs"
+test = false
+doc = false
+bench = false

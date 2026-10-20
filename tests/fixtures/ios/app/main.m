@@ -1,6 +1,6 @@
-// Main executable of msec's IPA fixture: Objective-C under ARC, linked against the fixture's
-// framework, with a bounded string copy and a log call, so the Mach-O checks have imports,
-// symbols and a stack protector to find.
+// Main executable of msec's IPA fixture: Objective-C under ARC with objects it retains, linked
+// against the fixture's framework, with a bounded string copy and a log call, so the Mach-O
+// checks have ARC calls, imports and a stack protector to find.
 #import <Foundation/Foundation.h>
 #include <string.h>
 
@@ -11,7 +11,10 @@ int main(int argc, char *argv[]) {
         char buffer[16];
         strncpy(buffer, argc > 1 ? argv[1] : "fixture", sizeof buffer - 1);
         buffer[sizeof buffer - 1] = '\0';
-        NSLog(@"%s %d", buffer, fixture_lib_answer());
+        // Objects ARC retains and releases, so its runtime calls are imported.
+        NSMutableArray<NSString *> *lines = [NSMutableArray array];
+        [lines addObject:[NSString stringWithFormat:@"%s %d", buffer, fixture_lib_answer()]];
+        NSLog(@"%@", lines.firstObject);
     }
     return 0;
 }

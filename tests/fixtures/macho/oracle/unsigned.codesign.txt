@@ -1,0 +1,4 @@
+bin/unsigned: code object is not signed at all
+verify: code object is not signed at all
+# entitlements
+

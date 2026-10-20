@@ -1,0 +1,20 @@
+Identifier=stack-exec-555549445b56e6ad2f7d392389241d70d67a9f2e
+Format=Mach-O thin (arm64)
+CodeDirectory v=20400 size=332 flags=0x2(adhoc) hashes=4+2 location=embedded
+Hash type=sha256 size=32
+CandidateCDHash sha256=6ac40d4a1b7e8648dfdc17b0a8f9ad9d6e3e0490
+CandidateCDHashFull sha256=6ac40d4a1b7e8648dfdc17b0a8f9ad9d6e3e0490d87bb972196fc5820d236756
+Hash choices=sha256
+CMSDigest=6ac40d4a1b7e8648dfdc17b0a8f9ad9d6e3e0490d87bb972196fc5820d236756
+CMSDigestType=2
+CDHash=6ac40d4a1b7e8648dfdc17b0a8f9ad9d6e3e0490
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1
+verify: valid
+# entitlements
+

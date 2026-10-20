@@ -1,0 +1,21 @@
+Identifier=hardened-55554944849b6b06c4103ebba84f8dc16da072b1
+Format=Mach-O thin (arm64)
+CodeDirectory v=20400 size=522 flags=0x2(adhoc) hashes=5+7 location=embedded
+Hash type=sha256 size=32
+CandidateCDHash sha256=1f27c0d122535b6369dc7733e2e1ec646e6adf54
+CandidateCDHashFull sha256=1f27c0d122535b6369dc7733e2e1ec646e6adf548aeddd7dccd40660449e66d3
+Hash choices=sha256
+CMSDigest=1f27c0d122535b6369dc7733e2e1ec646e6adf548aeddd7dccd40660449e66d3
+CMSDigestType=2
+CDHash=1f27c0d122535b6369dc7733e2e1ec646e6adf54
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1
+verify: invalid signature (code or signature have been modified)
+# entitlements
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>application-identifier</key><string>A1B2C3D4E5.dev.appchk.macho</string><key>com.apple.developer.team-identifier</key><string>A1B2C3D4E5</string><key>get-task-allow</key><true/></dict></plist>
+

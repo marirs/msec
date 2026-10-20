@@ -1,0 +1,20 @@
+Identifier=no-canary-5555494453b075f6009f3b709d55fb0c85860fdc
+Format=Mach-O thin (arm64)
+CodeDirectory v=20400 size=331 flags=0x2(adhoc) hashes=4+2 location=embedded
+Hash type=sha256 size=32
+CandidateCDHash sha256=9f5207480ca90cefca8cf0b9a8c0fd2d9d471277
+CandidateCDHashFull sha256=9f5207480ca90cefca8cf0b9a8c0fd2d9d471277a428d08a83be239d6eadffc9
+Hash choices=sha256
+CMSDigest=9f5207480ca90cefca8cf0b9a8c0fd2d9d471277a428d08a83be239d6eadffc9
+CMSDigestType=2
+CDHash=9f5207480ca90cefca8cf0b9a8c0fd2d9d471277
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements count=0 size=12
+Total signatures=1
+Chosen signature=1
+verify: valid
+# entitlements
+

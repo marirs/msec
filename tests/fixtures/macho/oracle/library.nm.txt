@@ -1,0 +1,3 @@
+# nm -u
+# debug entries (nm -ap, type -, except OPT)
+0

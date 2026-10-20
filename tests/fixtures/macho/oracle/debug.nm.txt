@@ -1,0 +1,7 @@
+# nm -u
+___stack_chk_fail
+___stack_chk_guard
+___strcpy_chk
+_printf
+# debug entries (nm -ap, type -, except OPT)
+9

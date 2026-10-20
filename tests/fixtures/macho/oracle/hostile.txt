@@ -1,0 +1,21 @@
+big-endian: llvm-objdump reads; codesign code object is not signed at all
+code-directory-hashes-outside: llvm-objdump reads; codesign invalid signature (code or signature have been modified)
+code-directory-slots-huge: llvm-objdump reads; codesign invalid signature (code or signature have been modified)
+command-size-unaligned: llvm-objdump refuses: truncated or malformed object (load command 10 cmdsize not a multiple of 8); codesign object file format unrecognized, invalid, or unsuitable
+command-size-zero: llvm-objdump refuses: truncated or malformed object (load command 10 with size less than 8 bytes); codesign object file format unrecognized, invalid, or unsuitable
+commands-past-end: llvm-objdump refuses: truncated or malformed object (load commands extend past the end of the file); codesign object file format unrecognized, invalid, or unsuitable
+duplicate-exports-trie: llvm-objdump refuses: truncated or malformed object (more than one LC_DYLD_EXPORTS_TRIE command); codesign invalid signature (code or signature have been modified)
+dylib-name-outside: llvm-objdump refuses: truncated or malformed object (load command 15 LC_LOAD_DYLIB name.offset field extends past the end of the load command); codesign invalid signature (code or signature have been modified)
+rpath-unterminated: llvm-objdump refuses: truncated or malformed object (load command 12 LC_RPATH library name extends past the end of the load command); codesign invalid signature (code or signature have been modified)
+segment-outside: llvm-objdump refuses: truncated or malformed object (load command 4 fileoff field plus filesize field in LC_SEGMENT_64 extends past the end of the file); codesign invalid signature (code or signature have been modified)
+signature-count-huge: llvm-objdump reads; codesign invalid or unsupported format for signature
+signature-not-superblob: llvm-objdump reads; codesign invalid or unsupported format for signature
+signature-outside: llvm-objdump refuses: truncated or malformed object (dataoff field plus datasize field of LC_CODE_SIGNATURE command 21 extends past the end of the file); codesign invalid or unsupported format for signature
+symbol-name-outside: llvm-objdump reads; codesign invalid signature (code or signature have been modified)
+symbols-outside: llvm-objdump refuses: truncated or malformed object (symoff field plus nsyms field times sizeof(struct nlist_64) of LC_SYMTAB command 7 extends past the end of th; codesign invalid signature (code or signature have been modified)
+too-many-commands: llvm-objdump refuses: truncated or malformed object (load command 22 extends past the end all load commands in the file); codesign invalid signature (code or signature have been modified)
+truncated-header: llvm-objdump reads; codesign code object is not signed at all
+universal-java-like: llvm-objdump reads; codesign code object is not signed at all
+universal-nested: llvm-objdump refuses: Mach-O universal file for architecture arm64 is not a Mach-O file or an archive file; codesign code object is not signed at all
+universal-overlapping: llvm-objdump refuses: truncated or malformed fat file (cputype (16777228) cpusubtype (0) at offset 4096 with a size of 67920, overlaps cputype (16777228) cpusubty; codesign An internal error has occurred.
+universal-slice-outside: llvm-objdump refuses: truncated or malformed fat file (offset plus size of cputype (16777228) cpusubtype (0) extends past the end of the file); codesign main executable failed strict validation

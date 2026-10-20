@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::io::{Read, Seek};
 
+use super::binaries::{BinaryRole, BundleBinary, read_binary};
 use super::info::BundleInfo;
 use crate::archive::{ArchiveError, ZipArchive};
 use crate::plist::{self, Plist, PlistError};
@@ -113,6 +114,9 @@ pub struct AppBundle {
     pub fairplay_metadata: bool,
     /// Localizations (`<language>.lproj` directories at the bundle root), sorted.
     pub localizations: Vec<String>,
+    /// The main executable and every component's executable, read as Mach-O with their
+    /// signatures checked; main executable first.
+    pub binaries: Vec<BundleBinary>,
     /// Files in the bundle, nested components included.
     pub file_count: usize,
     /// Their uncompressed size, as the archive declares it.
@@ -307,11 +311,38 @@ fn read_app_bundle<R: Read + Seek>(
         .filter(|language| !language.is_empty())
         .map(str::to_owned)
         .collect();
+    let mut binaries = Vec::new();
+    if let Some(executable) = &executable {
+        binaries.push(read_binary(
+            archive,
+            executable,
+            BinaryRole::MainExecutable,
+            &path,
+        ));
+    }
+    for component in &components {
+        let Some(executable) = &component.executable else {
+            continue;
+        };
+        // A loose library is sealed by the app; a bundle by its own Info.plist and resources.
+        let bundle = if component.kind == ComponentKind::Library {
+            path.as_str()
+        } else {
+            component.path.as_str()
+        };
+        binaries.push(read_binary(
+            archive,
+            executable,
+            BinaryRole::Component(component.kind),
+            bundle,
+        ));
+    }
     AppBundle {
         info_plist,
         info,
         executable,
         components,
+        binaries,
         privacy_manifests,
         provisioning_profile: has("embedded.mobileprovision")
             .then(|| format!("{path}embedded.mobileprovision")),

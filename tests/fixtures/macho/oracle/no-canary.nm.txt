@@ -1,0 +1,5 @@
+# nm -u
+___strcpy_chk
+_puts
+# debug entries (nm -ap, type -, except OPT)
+0

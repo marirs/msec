@@ -36,7 +36,8 @@ target in `fuzz/`: the ZIP reader (`archive`), binary XML with the manifest and 
 security models (`binary_xml`), the resource table (`resource_table`), ELF with hardening
 (`elf`), X.509 certificates (`certificate`), DEX files (`dex`), aapt2's protobuf XML
 (`protobuf_xml`) and resource table (`protobuf_resources`), a whole APK through every analysis
-(`apk`), a whole app bundle (`bundle`), property lists (`plist`) and a whole IPA (`ipa`).
+(`apk`), a whole app bundle (`bundle`), property lists (`plist`), Mach-O files (`macho`) and a
+whole IPA (`ipa`).
 Seeds come from this repository's fixtures. `scripts/fuzz.sh` runs each for a time budget (60
 seconds by default; `FUZZ_SECONDS=600 scripts/fuzz.sh apk` for more) with a 10-second per-input
 timeout and a 2 GB memory limit; CI runs it on every change and daily. It needs a nightly
@@ -56,8 +57,9 @@ Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed 
    wake-lock, sign-in restoration and shrinking checks, app bundles module by module (done).
 3. Code rules and strings: a libsast-compatible pattern engine over decompiled sources (jadx as an
    optional external tool), strings and secrets, trackers, SBOM, scorecard.
-4. iOS: property lists read as Core Foundation reads them and the IPA's app bundle (done);
-   Mach-O checks, code signatures and entitlements, provisioning profiles, ATS and privacy
+4. iOS: property lists read as Core Foundation reads them, the IPA's app bundle, Mach-O
+   (load commands, symbols, hardening, code signatures with hash verification) for every
+   executable in it (done); CMS certificates, provisioning profiles, ATS and privacy
    manifests, Objective-C metadata, IPA binary rules (next).
 5. Malware indicators: domain checks, APKiD rules via yara-x.
 6. Remaining inputs (XAPK, APKS, AAB, JAR, AAR, SO), then dynamic analysis.

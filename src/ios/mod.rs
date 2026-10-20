@@ -6,10 +6,14 @@
 //! directory at any depth, and reads `Info.plist` with Python's `plistlib`. msec reads the
 //! archive in place, prefers `Payload/<name>.app/` at the archive root as the App Store expects
 //! it and records any other layout as an [`IpaProblem`], and reads plists the way iOS does
-//! ([`crate::plist`]). Mach-O analysis of the executables comes next; see `docs/PORTING.md`.
+//! ([`crate::plist`]). Every bundle's executable is read as Mach-O ([`crate::macho`]) and its
+//! code signature checked against the bundle's files ([`BundleBinary`]); see
+//! `docs/PORTING.md`.
 
+mod binaries;
 mod info;
 mod ipa;
 
+pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
 pub use info::{BundleInfo, WrongType};
 pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem, PrivacyManifest};

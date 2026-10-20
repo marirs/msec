@@ -8,7 +8,8 @@ use std::io::Cursor;
 use std::path::Path;
 
 use msec::archive::{Limits, ZipArchive};
-use msec::ios::{ComponentKind, Ipa, IpaProblem};
+use msec::ios::{BinaryRole, ComponentKind, Ipa, IpaProblem, SignatureKind};
+use msec::macho::Hardening;
 use msec::plist::{Anomaly, to_xml};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ios");
@@ -168,6 +169,9 @@ fn variants_match_the_installer() {
             "duplicate-identifier-binary",
             vec!["InfoPlistDuplicateKeys"],
         ),
+        // Changed after signing: layout and Info.plist are fine; the signature is not (below).
+        ("info-plist-after-signing", vec![]),
+        ("executable-after-signing", vec![]),
     ]);
     let verdicts = install_verdicts();
     assert_eq!(
@@ -253,4 +257,90 @@ fn archive_layouts_are_reported() {
         assert_eq!(ipa.problems, [IpaProblem::NoAppBundle], "{name}");
         assert!(ipa.app.is_none());
     }
+}
+
+/// Every executable of the fixture is read as Mach-O and its ad-hoc signature verifies: pages,
+/// entitlements and requirements, and the bundle's Info.plist and CodeResources seals.
+#[test]
+fn the_fixture_executables_are_signed_and_hardened() {
+    let app = read_ipa("fixture.ipa").app.unwrap();
+    let roles: Vec<(BinaryRole, &str)> = app
+        .binaries
+        .iter()
+        .map(|binary| (binary.role, binary.path.as_str()))
+        .collect();
+    assert_eq!(
+        roles,
+        [
+            (BinaryRole::MainExecutable, "Payload/Fixture.app/Fixture"),
+            (
+                BinaryRole::Component(ComponentKind::Framework),
+                "Payload/Fixture.app/Frameworks/Lib.framework/Lib"
+            ),
+            (
+                BinaryRole::Component(ComponentKind::Library),
+                "Payload/Fixture.app/Frameworks/libextra.dylib"
+            ),
+            (
+                BinaryRole::Component(ComponentKind::AppExtension),
+                "Payload/Fixture.app/PlugIns/Share.appex/Share"
+            ),
+        ]
+    );
+    for binary in &app.binaries {
+        assert_eq!(binary.signatures.len(), 1, "{}", binary.path);
+        let check = &binary.signatures[0];
+        assert_eq!(check.kind, SignatureKind::AdHoc, "{}", binary.path);
+        assert!(check.valid(), "{}: {check:?}", binary.path);
+    }
+    let main = &app.binaries[0];
+    let check = &main.signatures[0];
+    assert_eq!(check.identifier.as_deref(), Some("dev.appchk.fixture"));
+    assert_eq!(
+        (check.info_plist, check.resources),
+        (Some(true), Some(true))
+    );
+    let entitlements = main.entitlements().unwrap().as_ref().unwrap();
+    assert_eq!(
+        entitlements.root.get("get-task-allow"),
+        Some(&msec::plist::Value::Boolean(true))
+    );
+    let hardening = Hardening::of(main.images().next().unwrap());
+    assert!(hardening.pie == Some(true) && hardening.stack_canary && hardening.arc);
+    assert_eq!(hardening.encrypted, Some(false));
+}
+
+/// What codesign --verify said about each device bundle, against msec's checks of the main
+/// executable's signature: Info.plist or code changed after signing is caught either way.
+#[test]
+fn signature_checks_match_codesign() {
+    let verdicts = fixture_file("codesign-verdicts.txt");
+    let mut compared = 0;
+    for line in verdicts.lines() {
+        let (variant, verdict) = line.split_once(": ").unwrap();
+        let ipa = read_ipa(&format!("{variant}.ipa"));
+        let Some(main) = ipa
+            .app
+            .as_ref()
+            .and_then(|app| app.binaries.first())
+            .filter(|binary| binary.role == BinaryRole::MainExecutable)
+        else {
+            continue;
+        };
+        let check = &main.signatures[0];
+        assert_eq!(
+            check.valid(),
+            verdict == "valid",
+            "{variant}: codesign {verdict}, {check:?}"
+        );
+        compared += 1;
+    }
+    assert!(compared >= 6, "{compared}");
+    let info = read_ipa("info-plist-after-signing.ipa").app.unwrap();
+    let check = &info.binaries[0].signatures[0];
+    assert_eq!((check.pages, check.info_plist), (Some(true), Some(false)));
+    let code = read_ipa("executable-after-signing.ipa").app.unwrap();
+    let check = &code.binaries[0].signatures[0];
+    assert_eq!(check.pages, Some(false));
+    assert_eq!(check.mismatched_pages, [1]);
 }

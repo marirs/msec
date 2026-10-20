@@ -1,0 +1,12 @@
+duplicate-identifier-binary: valid
+duplicate-identifier-xml: valid
+executable-after-signing: Fixture.app: invalid signature (code or signature have been modified)
+executable-missing: valid
+executable-not-declared: valid
+executable-traversal: valid
+fixture: valid
+identifier-integer: valid
+info-plist-after-signing: Fixture.app: invalid Info.plist (plist or signature have been modified)
+info-plist-array: Fixture.app: code object is not signed at all
+info-plist-truncated: valid
+no-info-plist: valid

@@ -1,0 +1,31 @@
+# nm -u
+_$sBoWV
+_$sSiN
+_$ss11CommandLineO9argumentsSaySSGvgZ
+_$ss12_ArrayBufferV19_getElementSlowPathyyXlSiFyXl_Ts5
+_$ss15ContiguousArrayV034_makeUniqueAndReserveCapacityIfNotD0yyFyXl_Ts5
+_$ss15ContiguousArrayV12_endMutationyyFyXl_Ts5
+_$ss15ContiguousArrayV15reserveCapacityyySiFyXl_Ts5
+_$ss15ContiguousArrayV36_reserveCapacityAssumingUniqueBuffer8oldCountySi_tFyXl_Ts5
+_$ss15ContiguousArrayV37_appendElementAssumeUniqueAndCapacity_03newD0ySi_xntFyXl_Ts5
+_$ss18_CocoaArrayWrapperV8endIndexSivg
+_$ss23_ContiguousArrayStorageCMn
+_$ss5print_9separator10terminatoryypd_S2StF
+_OBJC_CLASS_$__TtCs12_SwiftObject
+_OBJC_METACLASS_$__TtCs12_SwiftObject
+__objc_empty_cache
+__swiftEmptyArrayStorage
+_malloc_size
+_memcpy
+_memmove
+_objc_opt_self
+_swift_allocObject
+_swift_beginAccess
+_swift_bridgeObjectRelease
+_swift_deallocClassInstance
+_swift_getTypeByMangledNameInContext2
+_swift_release_x19
+_swift_release_x24
+_swift_retain_x24
+# debug entries (nm -ap, type -, except OPT)
+0

@@ -33,8 +33,11 @@
 //! - [`ios::Ipa`]: iOS packages: the app bundle, `Info.plist`, embedded frameworks, app
 //!   extensions and privacy manifests.
 //!
-//! iOS binary analysis (Mach-O, code signatures, entitlements) follows next. See the
-//! repository README for the porting roadmap.
+//! - [`macho`]: Mach-O files (thin and universal): load commands, symbols, hardening, and code
+//!   signatures with page and special-slot hash verification; every executable of an IPA is
+//!   read this way.
+//!
+//! See the repository README for the porting roadmap.
 //!
 //! msec is an independent port and is not affiliated with or endorsed by the MobSF project.
 
@@ -43,6 +46,7 @@ pub mod archive;
 pub mod elf;
 pub mod hashes;
 pub mod ios;
+pub mod macho;
 pub mod magic;
 pub mod plist;
 pub mod scan_type;

@@ -1,0 +1,7 @@
+# nm -u
+_NSLog
+_OBJC_CLASS_$_NSString
+___CFConstantStringClassReference
+_objc_msgSend
+# debug entries (nm -ap, type -, except OPT)
+0

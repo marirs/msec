@@ -4,8 +4,10 @@
         Writes the Info.plist sources (XML) of the app, its framework and its extension for
         `iphoneos` or `iphonesimulator` into <out-dir>/{app,Lib,Share}.plist.
     python3 -I make_ipa.py variants <bundle> <out-dir>
-        Copies the signed bundle (Fixture.app) once per Info.plist variant below into
-        <out-dir>/<variant>/Fixture.app, each changed in one way.
+        Copies the bundle (Fixture.app) once per variant below into
+        <out-dir>/<variant>/Fixture.app, each changed in one way (build_ipa.sh signs them).
+    python3 -I make_ipa.py tamper <out-dir>
+        Changes the TAMPER variants after signing.
     python3 -I make_ipa.py ipa <out.ipa> <layout> <bundle>...
         Zips bundles into an IPA, deterministically (sorted, fixed timestamps, Unix modes kept).
 
@@ -231,6 +233,30 @@ VARIANTS = {
     "identifier-integer": lambda bundle: info_with(bundle, {"CFBundleIdentifier": 42}),
     "duplicate-identifier-xml": duplicate_identifier_xml,
     "duplicate-identifier-binary": duplicate_identifier_binary,
+    # Changed after signing (see TAMPER): signed as built.
+    "info-plist-after-signing": lambda bundle: None,
+    "executable-after-signing": lambda bundle: None,
+}
+
+
+def bump_version(bundle):
+    info = plistlib.loads((bundle / "Info.plist").read_bytes())
+    info["CFBundleShortVersionString"] = "9.9"
+    (bundle / "Info.plist").write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY))
+
+
+def flip_code_byte(bundle):
+    """Changes one byte of the main executable's first code page, past the load commands."""
+    executable = bundle / "Fixture"
+    data = bytearray(executable.read_bytes())
+    data[16384 + 16] ^= 0xFF
+    executable.write_bytes(bytes(data))
+
+
+# Changes made after signing, so the signature no longer matches.
+TAMPER = {
+    "info-plist-after-signing": bump_version,
+    "executable-after-signing": flip_code_byte,
 }
 
 
@@ -240,6 +266,11 @@ def variants(bundle, out):
         target = out / name / "Fixture.app"
         shutil.copytree(bundle, target, symlinks=True)
         change(target)
+
+
+def tamper(out):
+    for name, change in TAMPER.items():
+        change(Path(out) / name / "Fixture.app")
 
 
 def entries(bundle, prefix):
@@ -288,6 +319,8 @@ def main():
         write_info(sys.argv[2], sys.argv[3])
     elif command == "variants":
         variants(sys.argv[2], sys.argv[3])
+    elif command == "tamper":
+        tamper(sys.argv[2])
     elif command == "ipa":
         write_ipa(sys.argv[2], sys.argv[3], sys.argv[4:])
     else:

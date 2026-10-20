@@ -4,12 +4,15 @@
 #   framework with its own privacy manifest, a loose library, a share extension, a privacy
 #   manifest, a localization) built for iOS devices with Xcode's clang, ad-hoc signed with
 #   entitlements, and packaged by make_ipa.py; one IPA per Info.plist variant
-#   (make_ipa.py VARIANTS), each changed in one way and signed again;
+#   (make_ipa.py VARIANTS), each changed in one way and signed again, and two changed after
+#   signing (make_ipa.py TAMPER: Info.plist, one byte of the executable);
 # - ipa/layout-*.ipa: the fixture in other archive layouts (two apps, no Payload directory, no
 #   .app directory, no entries);
 # - install-verdicts.txt: the same variants built for the iOS simulator and installed into a
 #   temporary simulator device: whether iOS's installer accepts each, and for those it
 #   accepts, the bundle identifier it registered (which shows which duplicate key it used);
+# - codesign-verdicts.txt: codesign --verify --deep --strict on each device bundle (the
+#   simulator's installer does not check signatures);
 # - bundle.txt: the device bundle's file list, and plutil's reading of its Info.plist;
 #   fixture-Info.plist.xml: plutil's XML conversion of that Info.plist.
 # Needs macOS with Xcode (an iOS SDK and an iOS simulator runtime) and python3. Creates and
@@ -66,6 +69,7 @@ variants() { # platform
   for bundle in "$work/$1"/variants/*/Fixture.app; do
     sign "$bundle"
   done
+  python3 -I make_ipa.py tamper "$work/$1/variants"
 }
 
 build iphoneos
@@ -80,6 +84,16 @@ fixture="$work/iphoneos/variants/fixture/Fixture.app"
 for layout in two-apps not-in-payload no-app empty; do
   python3 -I make_ipa.py ipa "ipa/layout-$layout.ipa" "$layout" "$fixture"
 done
+# codesign's verdict on each device bundle (the simulator's installer does not check
+# signatures, so this is the oracle for them).
+for bundle in "$work"/iphoneos/variants/*/Fixture.app; do
+  variant="$(basename "$(dirname "$bundle")")"
+  if codesign --verify --deep --strict "$bundle" > /dev/null 2> "$work/log"; then
+    echo "$variant: valid"
+  else
+    echo "$variant: $(sed -e "s|$bundle|Fixture.app|g" -e "s|$work/iphoneos/variants/[^/]*/||g" "$work/log" | head -n 1 | cut -c 1-160)"
+  fi
+done > codesign-verdicts.txt
 {
   echo "# Files of ipa/fixture.ipa's bundle"
   (cd "$fixture/.." && find Fixture.app -type f | LC_ALL=C sort)

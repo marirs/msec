@@ -1,0 +1,18 @@
+# nm -u
+_NSLog
+_OBJC_CLASS_$_NSMutableArray
+_OBJC_CLASS_$_NSString
+___CFConstantStringClassReference
+___memcpy_chk
+___stack_chk_fail
+___stack_chk_guard
+_objc_autoreleasePoolPop
+_objc_autoreleasePoolPush
+_objc_claimAutoreleasedReturnValue
+_objc_msgSend
+_objc_release_x20
+_objc_release_x21
+_strlen
+_strncpy
+# debug entries (nm -ap, type -, except OPT)
+0
