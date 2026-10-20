@@ -11,6 +11,7 @@ Fixture.app/PlugIns/Share.appex/Share
 Fixture.app/PlugIns/Share.appex/_CodeSignature/CodeResources
 Fixture.app/PrivacyInfo.xcprivacy
 Fixture.app/_CodeSignature/CodeResources
+Fixture.app/embedded.mobileprovision
 Fixture.app/en.lproj/InfoPlist.strings
 # plutil -p Fixture.app/Info.plist
 {

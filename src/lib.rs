@@ -36,6 +36,9 @@
 //! - [`macho`]: Mach-O files (thin and universal): load commands, symbols, hardening, and code
 //!   signatures with page and special-slot hash verification; every executable of an IPA is
 //!   read this way.
+//! - [`cms`]: CMS (PKCS#7) SignedData, BER or DER, with signature verification; used by JAR
+//!   signatures and by provisioning profiles ([`ios::profile`]).
+//! - [`ios::ats`]: App Transport Security with Apple's documented semantics.
 //!
 //! See the repository README for the porting roadmap.
 //!
@@ -43,6 +46,7 @@
 
 pub mod android;
 pub mod archive;
+pub mod cms;
 pub mod elf;
 pub mod hashes;
 pub mod ios;

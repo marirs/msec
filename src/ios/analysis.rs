@@ -293,3 +293,304 @@ fn mismatch(check: &super::SignatureCheck) -> Option<String> {
     }
     (!parts.is_empty()).then(|| parts.join("; "))
 }
+
+/// A check on the app as a whole: its provisioning profile and its App Transport Security
+/// configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AppRule {
+    /// The provisioning profile cannot be read (msec).
+    ProfileUnreadable,
+    /// The profile's CMS signature does not verify: it was changed after signing (msec).
+    ProfileSignatureInvalid,
+    /// The profile has expired: iOS no longer launches the app (msec).
+    ProfileExpired,
+    /// The profile provisions a different bundle identifier (msec).
+    ProfileBundleMismatch,
+    /// The app's signature claims entitlements the profile does not allow (msec).
+    ProfileEntitlementsMismatch,
+    /// The profile distributes the app outside the App Store (development, ad hoc,
+    /// enterprise) (msec).
+    ProfileDistribution,
+    /// `NSAllowsArbitraryLoads` is in effect: ATS is off for every connection (MobSF).
+    AtsArbitraryLoads,
+    /// `NSAllowsArbitraryLoads` is set but iOS 10+ ignores it, because a narrower key is
+    /// present (msec refinement of MobSF's check).
+    AtsArbitraryLoadsIgnored,
+    /// `NSAllowsArbitraryLoadsInWebContent` (MobSF).
+    AtsWebContent,
+    /// `NSAllowsArbitraryLoadsForMedia` (MobSF).
+    AtsMedia,
+    /// `NSAllowsLocalNetworking` (MobSF).
+    AtsLocalNetworking,
+    /// An exception domain allows plain HTTP (MobSF; loopback hosts excepted).
+    AtsInsecureHttpDomain,
+    /// An exception domain accepts TLS 1.0 or 1.1 (MobSF; TLS 1.2 is the default, not
+    /// flagged).
+    AtsWeakTlsDomain,
+    /// An exception domain does not require forward secrecy (MobSF).
+    AtsForwardSecrecyDisabled,
+}
+
+impl AppRule {
+    /// Engine key.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::ProfileUnreadable => "msec_ios_profile_unreadable",
+            Self::ProfileSignatureInvalid => "msec_ios_profile_signature_invalid",
+            Self::ProfileExpired => "msec_ios_profile_expired",
+            Self::ProfileBundleMismatch => "msec_ios_profile_bundle_mismatch",
+            Self::ProfileEntitlementsMismatch => "msec_ios_profile_entitlements_mismatch",
+            Self::ProfileDistribution => "msec_ios_profile_distribution",
+            Self::AtsArbitraryLoads => "msec_ios_ats_arbitrary_loads",
+            Self::AtsArbitraryLoadsIgnored => "msec_ios_ats_arbitrary_loads_ignored",
+            Self::AtsWebContent => "msec_ios_ats_web_content",
+            Self::AtsMedia => "msec_ios_ats_media",
+            Self::AtsLocalNetworking => "msec_ios_ats_local_networking",
+            Self::AtsInsecureHttpDomain => "msec_ios_ats_insecure_http_domain",
+            Self::AtsWeakTlsDomain => "msec_ios_ats_weak_tls_domain",
+            Self::AtsForwardSecrecyDisabled => "msec_ios_ats_forward_secrecy_disabled",
+        }
+    }
+
+    /// Severity on MobSF's scale.
+    pub fn severity(self) -> Severity {
+        match self {
+            Self::ProfileUnreadable
+            | Self::ProfileSignatureInvalid
+            | Self::ProfileExpired
+            | Self::ProfileBundleMismatch
+            | Self::ProfileEntitlementsMismatch
+            | Self::AtsArbitraryLoads
+            | Self::AtsInsecureHttpDomain
+            | Self::AtsWeakTlsDomain => Severity::High,
+            Self::AtsWebContent | Self::AtsMedia | Self::AtsForwardSecrecyDisabled => {
+                Severity::Warning
+            }
+            Self::ProfileDistribution
+            | Self::AtsArbitraryLoadsIgnored
+            | Self::AtsLocalNetworking => Severity::Info,
+        }
+    }
+
+    /// Where the rule comes from.
+    pub fn origin(self) -> Origin {
+        match self {
+            Self::AtsArbitraryLoads
+            | Self::AtsWebContent
+            | Self::AtsMedia
+            | Self::AtsLocalNetworking
+            | Self::AtsInsecureHttpDomain
+            | Self::AtsWeakTlsDomain
+            | Self::AtsForwardSecrecyDisabled => Origin::MobSf,
+            _ => Origin::Msec,
+        }
+    }
+}
+
+/// One finding about the app.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppFinding {
+    /// The rule.
+    pub rule: AppRule,
+    /// The file it concerns (`Payload/A.app/Info.plist`, `.../embedded.mobileprovision`).
+    pub location: String,
+    /// What it is about: a domain, an entitlement, the profile's kind.
+    pub subject: Option<String>,
+    /// What triggered it.
+    pub detail: String,
+}
+
+/// The profile and ATS checks. `today` (`yyyy-MM-dd`) dates the profile's expiry.
+pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
+    let mut findings = Vec::new();
+    profile_checks(app, today, &mut findings);
+    ats_checks(app, &mut findings);
+    findings
+}
+
+fn profile_checks(app: &AppBundle, today: &str, findings: &mut Vec<AppFinding>) {
+    use super::profile::{ProfileKind, entitlement_mismatches};
+
+    let (Some(location), Some(profile)) = (&app.provisioning_profile, &app.profile) else {
+        return;
+    };
+    let mut push = |rule: AppRule, subject: Option<String>, detail: String| {
+        findings.push(AppFinding {
+            rule,
+            location: location.clone(),
+            subject,
+            detail,
+        });
+    };
+    let profile = match profile {
+        Ok(profile) => profile,
+        Err(error) => {
+            push(AppRule::ProfileUnreadable, None, error.to_string());
+            return;
+        }
+    };
+    if let Err(problem) = &profile.signature.verified {
+        push(
+            AppRule::ProfileSignatureInvalid,
+            None,
+            format!("the profile's CMS signature does not verify ({problem:?})"),
+        );
+    }
+    if profile.expired(today) == Some(true) {
+        let date = profile.expires_on().unwrap_or_default();
+        push(
+            AppRule::ProfileExpired,
+            Some(date.clone()),
+            format!("the provisioning profile expired on {date}: iOS no longer launches the app"),
+        );
+    }
+    if let Some(identifier) = app
+        .info
+        .as_ref()
+        .and_then(|info| info.identifier.as_deref())
+        && profile.covers_bundle(identifier) == Some(false)
+    {
+        push(
+            AppRule::ProfileBundleMismatch,
+            Some(identifier.to_owned()),
+            format!(
+                "the profile provisions {}, not {identifier}",
+                profile
+                    .application_identifier()
+                    .unwrap_or("no application identifier")
+            ),
+        );
+    }
+    let app_entitlements = app
+        .binaries
+        .first()
+        .and_then(|binary| binary.entitlements())
+        .and_then(|plist| plist.as_ref().ok())
+        .and_then(|plist| plist.root.as_dictionary());
+    if let (Some(allowed), Some(claimed)) = (profile.entitlements(), app_entitlements) {
+        for mismatch in entitlement_mismatches(allowed, claimed) {
+            push(
+                AppRule::ProfileEntitlementsMismatch,
+                Some(mismatch.key),
+                mismatch.reason,
+            );
+        }
+    }
+    let kind = profile.kind();
+    if kind != ProfileKind::AppStore {
+        let devices = profile.provisioned_devices.len();
+        let detail = match kind {
+            ProfileKind::Enterprise => {
+                "an enterprise (in-house) profile: installs on any device, outside the App Store"
+                    .to_owned()
+            }
+            _ => format!(
+                "a {} profile for {devices} device{}: not an App Store build",
+                kind.label(),
+                if devices == 1 { "" } else { "s" }
+            ),
+        };
+        push(
+            AppRule::ProfileDistribution,
+            Some(kind.label().to_owned()),
+            detail,
+        );
+    }
+}
+
+fn ats_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    let Some(ats) = &app.transport_security else {
+        return;
+    };
+    let location = format!("{}Info.plist", app.path);
+    let mut push = |rule: AppRule, subject: Option<String>, detail: String| {
+        findings.push(AppFinding {
+            rule,
+            location: location.clone(),
+            subject,
+            detail,
+        });
+    };
+    let minimum_os = app
+        .info
+        .as_ref()
+        .and_then(|info| info.minimum_os_version.as_deref());
+    if ats.allows_arbitrary_loads == Some(true) {
+        if ats.arbitrary_loads_effective(minimum_os) {
+            push(
+                AppRule::AtsArbitraryLoads,
+                None,
+                "NSAllowsArbitraryLoads is true: App Transport Security is off for every \
+                 connection (plain HTTP and weak TLS allowed)"
+                    .to_owned(),
+            );
+        } else if let Some(key) = ats.arbitrary_loads_overridden_by() {
+            push(
+                AppRule::AtsArbitraryLoadsIgnored,
+                None,
+                format!(
+                    "NSAllowsArbitraryLoads is true but {key} is present, so iOS 10 and later \
+                     ignore it"
+                ),
+            );
+        }
+    }
+    let flags = [
+        (
+            ats.allows_arbitrary_loads_in_web_content,
+            AppRule::AtsWebContent,
+            "NSAllowsArbitraryLoadsInWebContent is true: web views load any content over plain \
+             HTTP or weak TLS",
+        ),
+        (
+            ats.allows_arbitrary_loads_for_media,
+            AppRule::AtsMedia,
+            "NSAllowsArbitraryLoadsForMedia is true: AVFoundation media loads over plain HTTP \
+             or weak TLS",
+        ),
+        (
+            ats.allows_local_networking,
+            AppRule::AtsLocalNetworking,
+            "NSAllowsLocalNetworking is true: local hosts (.local names, unqualified names, IP \
+             addresses) are reached without ATS",
+        ),
+    ];
+    for (value, rule, detail) in flags {
+        if value == Some(true) {
+            push(rule, None, detail.to_owned());
+        }
+    }
+    for domain in &ats.exception_domains {
+        let scope = if domain.includes_subdomains {
+            format!("{} and its subdomains", domain.domain)
+        } else {
+            domain.domain.clone()
+        };
+        if let Some(key) = &domain.insecure_http
+            && !domain.is_loopback()
+        {
+            push(
+                AppRule::AtsInsecureHttpDomain,
+                Some(domain.domain.clone()),
+                format!("{key}: plain HTTP allowed for {scope}"),
+            );
+        }
+        if domain.weak_tls() {
+            push(
+                AppRule::AtsWeakTlsDomain,
+                Some(domain.domain.clone()),
+                format!(
+                    "{} accepted for {scope} (ATS requires TLS 1.2 by default)",
+                    domain.minimum_tls.as_deref().unwrap_or_default()
+                ),
+            );
+        }
+        if domain.requires_forward_secrecy == Some(false) {
+            push(
+                AppRule::AtsForwardSecrecyDisabled,
+                Some(domain.domain.clone()),
+                format!("forward secrecy not required for {scope}"),
+            );
+        }
+    }
+}

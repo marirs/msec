@@ -4,7 +4,8 @@
 #   framework with its own privacy manifest, a loose library, a share extension, a privacy
 #   manifest, a localization) built for iOS devices with Xcode's clang, ad-hoc signed with
 #   entitlements, and packaged by make_ipa.py; one IPA per Info.plist variant
-#   (make_ipa.py VARIANTS), each changed in one way and signed again, and two changed after
+#   (make_ipa.py VARIANTS), each changed in one way and signed again (two embed another
+#   provisioning profile from build_profiles.sh), and two changed after
 #   signing (make_ipa.py TAMPER: Info.plist, one byte of the executable);
 # - ipa/layout-*.ipa: the fixture in other archive layouts (two apps, no Payload directory, no
 #   .app directory, no entries);
@@ -54,6 +55,7 @@ build() { # platform: iphoneos or iphonesimulator
   plutil -convert binary1 -o "$app/Info.plist" "$work/$platform/info/app.plist"
   cp app/PrivacyInfo.xcprivacy "$app/PrivacyInfo.xcprivacy"
   plutil -convert binary1 -o "$app/en.lproj/InfoPlist.strings" app/InfoPlist.strings
+  cp profiles/development.mobileprovision "$app/embedded.mobileprovision"
 }
 
 # Ad-hoc signs a bundle inside out, as Xcode does; a variant codesign refuses stays unsigned.
@@ -72,6 +74,8 @@ variants() { # platform
   python3 -I make_ipa.py tamper "$work/$1/variants"
 }
 
+# The provisioning profiles the bundle embeds (and the variants swap in).
+./build_profiles.sh
 build iphoneos
 variants iphoneos
 rm -rf ipa

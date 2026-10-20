@@ -134,7 +134,10 @@ fn the_fixture_app_is_read_in_full() {
         app.code_resources.as_deref(),
         Some("Payload/Fixture.app/_CodeSignature/CodeResources")
     );
-    assert_eq!(app.provisioning_profile, None);
+    assert_eq!(
+        app.provisioning_profile.as_deref(),
+        Some("Payload/Fixture.app/embedded.mobileprovision")
+    );
     assert!(!app.fairplay_metadata);
     assert_eq!(app.localizations, ["en"]);
 }
@@ -169,6 +172,9 @@ fn variants_match_the_installer() {
             "duplicate-identifier-binary",
             vec!["InfoPlistDuplicateKeys"],
         ),
+        // Another profile: the layout is fine; the profile checks catch them (below).
+        ("profile-expired", vec![]),
+        ("profile-other-bundle", vec![]),
         // Changed after signing: layout and Info.plist are fine; the signature is not (below).
         ("info-plist-after-signing", vec![]),
         ("executable-after-signing", vec![]),
@@ -386,4 +392,50 @@ fn binary_checks_report_what_they_find() {
         .unwrap()
         .detail;
     assert_eq!(detail, "Info.plist changed after signing");
+}
+
+/// The profile and ATS checks on the fixture and on the variants that embed another profile:
+/// the development profile, ATS off (NSAllowsArbitraryLoads alone), TLS 1.0 for example.com;
+/// an expired profile; a profile for another app, whose application identifier the signature's
+/// entitlements do not match either.
+#[test]
+fn app_checks_report_profile_and_ats() {
+    use msec::ios::analysis::{AppRule, analyse_app};
+
+    let findings = |name: &str| -> Vec<(AppRule, Option<String>)> {
+        analyse_app(&read_ipa(name).app.unwrap(), "2026-10-20")
+            .into_iter()
+            .map(|finding| (finding.rule, finding.subject))
+            .collect()
+    };
+    assert_eq!(
+        findings("fixture.ipa"),
+        [
+            (AppRule::ProfileDistribution, Some("development".into())),
+            (AppRule::AtsArbitraryLoads, None),
+            (AppRule::AtsWeakTlsDomain, Some("example.com".into())),
+        ]
+    );
+    assert!(
+        findings("profile-expired.ipa")
+            .contains(&(AppRule::ProfileExpired, Some("2026-01-31".into())))
+    );
+    let other = findings("profile-other-bundle.ipa");
+    assert!(other.contains(&(
+        AppRule::ProfileBundleMismatch,
+        Some("dev.appchk.fixture".into())
+    )));
+    assert!(other.contains(&(
+        AppRule::ProfileEntitlementsMismatch,
+        Some("application-identifier".into())
+    )));
+    let app = read_ipa("fixture.ipa").app.unwrap();
+    let profile = app.profile.unwrap().unwrap();
+    assert_eq!(profile.name.as_deref(), Some("Fixture Development"));
+    let ats = app.transport_security.unwrap();
+    assert_eq!(ats.allows_arbitrary_loads, Some(true));
+    assert_eq!(
+        ats.exception_domains[0].minimum_tls.as_deref(),
+        Some("TLSv1.0")
+    );
 }

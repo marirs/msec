@@ -25,7 +25,7 @@
 //! resolves duplicate keys the same way for both formats; see `docs/PORTING.md`.
 
 mod binary;
-mod date;
+pub(crate) mod date;
 mod render;
 mod xml;
 

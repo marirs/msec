@@ -1,0 +1,11 @@
+ad-hoc: verified
+app-store: verified
+development-ber: verified
+development: verified
+enterprise: verified
+expired: verified
+no-keychain: verified
+not-signed: not verified
+other-bundle: verified
+tampered: not verified
+wildcard: verified

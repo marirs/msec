@@ -3,8 +3,10 @@
 use std::collections::BTreeSet;
 use std::io::{Read, Seek};
 
+use super::ats::TransportSecurity;
 use super::binaries::{BinaryRole, BundleBinary, read_binary};
 use super::info::BundleInfo;
+use super::profile::{ProfileError, ProvisioningProfile};
 use crate::archive::{ArchiveError, ZipArchive};
 use crate::plist::{self, Plist, PlistError};
 
@@ -108,6 +110,10 @@ pub struct AppBundle {
     /// `embedded.mobileprovision`: the provisioning profile (absent from App Store
     /// downloads).
     pub provisioning_profile: Option<String>,
+    /// That profile, read.
+    pub profile: Option<Result<ProvisioningProfile, ProfileError>>,
+    /// `NSAppTransportSecurity`, read from `Info.plist`.
+    pub transport_security: Option<TransportSecurity>,
     /// `_CodeSignature/CodeResources`: the code signature's seal of the bundle's resources.
     pub code_resources: Option<String>,
     /// `SC_Info/`: FairPlay metadata, present when the App Store encrypted the executables.
@@ -311,6 +317,18 @@ fn read_app_bundle<R: Read + Seek>(
         .filter(|language| !language.is_empty())
         .map(str::to_owned)
         .collect();
+    let profile_path = format!("{path}embedded.mobileprovision");
+    let profile = archive
+        .find(&profile_path)
+        .map(|entry| entry.index)
+        .map(|index| match archive.read(index) {
+            Ok(bytes) => ProvisioningProfile::parse(&bytes),
+            Err(error) => Err(ProfileError::Unreadable(error.to_string())),
+        });
+    let transport_security = info_plist
+        .as_ref()
+        .and_then(|plist| plist.root.as_dictionary())
+        .map(TransportSecurity::of);
     let mut binaries = Vec::new();
     if let Some(executable) = &executable {
         binaries.push(read_binary(
@@ -344,8 +362,9 @@ fn read_app_bundle<R: Read + Seek>(
         components,
         binaries,
         privacy_manifests,
-        provisioning_profile: has("embedded.mobileprovision")
-            .then(|| format!("{path}embedded.mobileprovision")),
+        provisioning_profile: has("embedded.mobileprovision").then_some(profile_path),
+        profile,
+        transport_security,
         code_resources: has("_CodeSignature/CodeResources")
             .then(|| format!("{path}_CodeSignature/CodeResources")),
         fairplay_metadata: inside

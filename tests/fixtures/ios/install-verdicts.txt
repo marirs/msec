@@ -10,3 +10,5 @@ info-plist-after-signing: installed as dev.appchk.fixture
 info-plist-array: refused: Missing bundle ID.
 info-plist-truncated: refused: Missing bundle ID.
 no-info-plist: refused: Missing bundle ID.
+profile-expired: installed as dev.appchk.fixture
+profile-other-bundle: installed as dev.appchk.fixture

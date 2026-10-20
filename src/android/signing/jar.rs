@@ -5,19 +5,15 @@
 
 use std::io::{Read, Seek};
 
-use der::asn1::ObjectIdentifier;
-
 use super::certificate::CertificateInfo;
-use super::crypto::{self, Hash, Primitive, VerifyError};
+use super::crypto::{self, Hash};
 use crate::archive::ZipArchive;
+use crate::cms::{self, SignedData, VerifyProblem};
 
 const META_INF: &str = "META-INF/";
 const MANIFEST: &str = "META-INF/MANIFEST.MF";
 /// Problems reported per kind before the rest are only counted.
 const MAX_ENTRY_PROBLEMS: usize = 20;
-
-const OID_SIGNED_DATA: &str = "1.2.840.113549.1.7.2";
-const OID_MESSAGE_DIGEST: &str = "1.2.840.113549.1.9.4";
 
 /// Why a JAR signature (or one signer of it) does not verify.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -193,9 +189,9 @@ fn verify_signer(
     sections: &[ManifestSection<'_>],
 ) -> JarSigner {
     let mut signer = unverified_signer(name);
-    match Pkcs7::parse(block) {
-        Some(pkcs7) => verify_block(&pkcs7, sf, &mut signer),
-        None => signer.problems.push(JarProblem::BlockUnreadable),
+    match cms::parse(block) {
+        Ok(signed) if !signed.signers.is_empty() => verify_block(&signed, sf, &mut signer),
+        _ => signer.problems.push(JarProblem::BlockUnreadable),
     }
     let sf_sections = parse_manifest(sf);
     if let Some(main) = sf_sections.first() {
@@ -214,103 +210,27 @@ fn verify_signer(
     signer
 }
 
-/// The PKCS#7 block signs the `.SF` bytes, directly or through signed attributes.
-fn verify_block(pkcs7: &Pkcs7<'_>, sf: &[u8], signer: &mut JarSigner) {
-    signer.certificates = pkcs7
+/// The PKCS#7 block signs the `.SF` bytes, directly or through signed attributes (its first
+/// signer, as Android reads it).
+fn verify_block(signed: &SignedData, sf: &[u8], signer: &mut JarSigner) {
+    signer.certificates = signed
         .certificates
         .iter()
         .filter_map(|der| CertificateInfo::from_der(der).ok())
         .collect();
-    let Some(certificate) = pkcs7
-        .signer_certificate()
-        .and_then(|der| CertificateInfo::from_der(der).ok())
-    else {
-        signer.problems.push(JarProblem::NoCertificate);
-        return;
-    };
-    let Some(hash) = digest_hash(&pkcs7.digest_algorithm) else {
-        signer.problems.push(JarProblem::UnsupportedAlgorithm(
-            pkcs7.digest_algorithm.clone(),
-        ));
-        return;
-    };
-    signer.digest = Some(hash);
-    let Some(primitive) = signature_primitive(
-        &pkcs7.signature_algorithm,
-        &certificate.public_key.algorithm,
-    ) else {
-        signer.problems.push(JarProblem::UnsupportedAlgorithm(
-            pkcs7.signature_algorithm.clone(),
-        ));
-        return;
-    };
-    let message = match &pkcs7.signed_attributes {
-        Some(attributes) => {
-            if attributes.message_digest.as_deref() != Some(crypto::digest(hash, sf).as_slice()) {
-                signer
-                    .problems
-                    .push(JarProblem::SignedAttributesDigestMismatch);
-            }
-            attributes.reencoded.clone()
+    let first = &signed.signers[0];
+    signer.digest = cms::digest_hash(&first.digest_algorithm);
+    match signed.verify(first, sf) {
+        Ok(_) => {}
+        Err(VerifyProblem::NoCertificate) => signer.problems.push(JarProblem::NoCertificate),
+        Err(VerifyProblem::UnsupportedAlgorithm(oid)) => {
+            signer.problems.push(JarProblem::UnsupportedAlgorithm(oid));
         }
-        None => sf.to_vec(),
-    };
-    let spki = spki_of(&certificate.der);
-    match crypto::verify(primitive, hash, &spki, &message, &pkcs7.signature) {
-        Ok(()) => {}
-        Err(VerifyError::UnsupportedKey) => signer.problems.push(JarProblem::KeyUnsupported),
-        Err(VerifyError::Invalid) => signer.problems.push(JarProblem::SignatureInvalid),
-    }
-}
-
-fn spki_of(certificate: &[u8]) -> Vec<u8> {
-    use der::{Decode, Encode};
-    x509_cert::Certificate::from_der(certificate)
-        .ok()
-        .and_then(|certificate| {
-            certificate
-                .tbs_certificate()
-                .subject_public_key_info()
-                .to_der()
-                .ok()
-        })
-        .unwrap_or_default()
-}
-
-fn digest_hash(oid: &str) -> Option<Hash> {
-    match oid {
-        "1.3.14.3.2.26" => Some(Hash::Sha1),
-        "2.16.840.1.101.3.4.2.1" => Some(Hash::Sha256),
-        "2.16.840.1.101.3.4.2.2" => Some(Hash::Sha384),
-        "2.16.840.1.101.3.4.2.3" => Some(Hash::Sha512),
-        _ => None,
-    }
-}
-
-/// The primitive from the signature algorithm OID; plain `rsaEncryption`/`id-ecPublicKey`/
-/// `id-dsa` OIDs mean "the key's algorithm with the digest algorithm".
-fn signature_primitive(oid: &str, key_algorithm: &str) -> Option<Primitive> {
-    match oid {
-        "1.2.840.113549.1.1.1"
-        | "1.2.840.113549.1.1.5"
-        | "1.2.840.113549.1.1.11"
-        | "1.2.840.113549.1.1.12"
-        | "1.2.840.113549.1.1.13" => Some(Primitive::RsaPkcs1),
-        "1.2.840.10045.2.1"
-        | "1.2.840.10045.4.1"
-        | "1.2.840.10045.4.3.2"
-        | "1.2.840.10045.4.3.3"
-        | "1.2.840.10045.4.3.4" => Some(Primitive::Ecdsa),
-        "1.2.840.10040.4.1"
-        | "1.2.840.10040.4.3"
-        | "2.16.840.1.101.3.4.3.1"
-        | "2.16.840.1.101.3.4.3.2" => Some(Primitive::Dsa),
-        _ => match key_algorithm {
-            "RSA" => Some(Primitive::RsaPkcs1),
-            "EC" => Some(Primitive::Ecdsa),
-            "DSA" => Some(Primitive::Dsa),
-            _ => None,
-        },
+        Err(VerifyProblem::SignedAttributesDigestMismatch) => signer
+            .problems
+            .push(JarProblem::SignedAttributesDigestMismatch),
+        Err(VerifyProblem::KeyUnsupported) => signer.problems.push(JarProblem::KeyUnsupported),
+        Err(VerifyProblem::SignatureInvalid) => signer.problems.push(JarProblem::SignatureInvalid),
     }
 }
 
@@ -571,188 +491,6 @@ fn base64_decode(text: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-// ---------------------------------------------------------------------------------------------
-// PKCS#7 SignedData, the parts JAR signing uses
-// ---------------------------------------------------------------------------------------------
-
-/// A DER element.
-struct Tlv<'data> {
-    tag: u8,
-    value: &'data [u8],
-    raw: &'data [u8],
-}
-
-/// Reads one DER element (definite lengths only; DER never uses indefinite ones).
-fn read_tlv(input: &[u8]) -> Option<(Tlv<'_>, &[u8])> {
-    let tag = *input.first()?;
-    let first = *input.get(1)?;
-    let (length, header) = if first & 0x80 == 0 {
-        (usize::from(first), 2)
-    } else {
-        let count = usize::from(first & 0x7f);
-        if count == 0 || count > 4 {
-            return None;
-        }
-        let length = input
-            .get(2..2 + count)?
-            .iter()
-            .fold(0usize, |length, byte| (length << 8) | usize::from(*byte));
-        (length, 2 + count)
-    };
-    let end = header.checked_add(length)?;
-    let raw = input.get(..end)?;
-    Some((
-        Tlv {
-            tag,
-            value: &raw[header..],
-            raw,
-        },
-        &input[end..],
-    ))
-}
-
-fn children(value: &[u8]) -> Option<Vec<Tlv<'_>>> {
-    let mut rest = value;
-    let mut items = Vec::new();
-    while !rest.is_empty() {
-        let (item, next) = read_tlv(rest)?;
-        items.push(item);
-        rest = next;
-    }
-    Some(items)
-}
-
-fn oid(tlv: &Tlv<'_>) -> Option<String> {
-    (tlv.tag == 0x06)
-        .then(|| {
-            ObjectIdentifier::from_bytes(tlv.value)
-                .ok()
-                .map(|oid| oid.to_string())
-        })
-        .flatten()
-}
-
-/// The first element of an `AlgorithmIdentifier` sequence.
-fn algorithm_oid(tlv: &Tlv<'_>) -> Option<String> {
-    oid(children(tlv.value)?.first()?)
-}
-
-struct SignedAttributes {
-    /// The attributes re-encoded as a DER `SET OF`, which is what is signed.
-    reencoded: Vec<u8>,
-    message_digest: Option<Vec<u8>>,
-}
-
-struct Pkcs7<'data> {
-    certificates: Vec<&'data [u8]>,
-    signer_serial: Option<&'data [u8]>,
-    digest_algorithm: String,
-    signature_algorithm: String,
-    signed_attributes: Option<SignedAttributes>,
-    signature: Vec<u8>,
-}
-
-impl<'data> Pkcs7<'data> {
-    fn parse(bytes: &'data [u8]) -> Option<Self> {
-        let (content_info, _) = read_tlv(bytes)?;
-        let parts = children(content_info.value)?;
-        if oid(parts.first()?)? != OID_SIGNED_DATA {
-            return None;
-        }
-        let (signed_data, _) = read_tlv(parts.get(1)?.value)?;
-        let fields = children(signed_data.value)?;
-        let certificates = fields
-            .iter()
-            .find(|field| field.tag == 0xa0)
-            .and_then(|field| children(field.value))
-            .map(|certificates| {
-                certificates
-                    .iter()
-                    .map(|certificate| certificate.raw)
-                    .collect()
-            })
-            .unwrap_or_default();
-        let signer_infos = fields.iter().rev().find(|field| field.tag == 0x31)?;
-        let signer = children(signer_infos.value)?.into_iter().next()?;
-        Self::from_signer_info(&signer, certificates)
-    }
-
-    fn from_signer_info(signer: &Tlv<'data>, certificates: Vec<&'data [u8]>) -> Option<Self> {
-        let fields = children(signer.value)?;
-        // version, sid, digestAlgorithm, [0] signedAttrs?, signatureAlgorithm, signature, [1]?
-        let signer_serial = fields
-            .get(1)
-            .filter(|sid| sid.tag == 0x30)
-            .and_then(|sid| children(sid.value))
-            .and_then(|parts| parts.get(1).map(|serial| serial.value));
-        let digest_algorithm = algorithm_oid(fields.get(2)?)?;
-        let mut rest = &fields[3..];
-        let signed_attributes = match rest.first() {
-            Some(attributes) if attributes.tag == 0xa0 => {
-                rest = &rest[1..];
-                Some(signed_attributes(attributes)?)
-            }
-            _ => None,
-        };
-        Some(Self {
-            certificates,
-            signer_serial,
-            digest_algorithm,
-            signature_algorithm: algorithm_oid(rest.first()?)?,
-            signed_attributes,
-            signature: rest
-                .get(1)
-                .filter(|signature| signature.tag == 0x04)?
-                .value
-                .to_vec(),
-        })
-    }
-
-    /// The certificate whose serial number matches the signer's, else the first.
-    fn signer_certificate(&self) -> Option<&'data [u8]> {
-        let serial = self.signer_serial;
-        self.certificates
-            .iter()
-            .find(|certificate| {
-                serial.is_some_and(|serial| certificate_serial(certificate) == Some(serial))
-            })
-            .or_else(|| self.certificates.first())
-            .copied()
-    }
-}
-
-fn signed_attributes(attributes: &Tlv<'_>) -> Option<SignedAttributes> {
-    let mut reencoded = attributes.raw.to_vec();
-    reencoded[0] = 0x31;
-    let message_digest = children(attributes.value)?.iter().find_map(|attribute| {
-        let parts = children(attribute.value)?;
-        if oid(parts.first()?)? != OID_MESSAGE_DIGEST {
-            return None;
-        }
-        let values = children(parts.get(1)?.value)?;
-        values
-            .first()
-            .filter(|value| value.tag == 0x04)
-            .map(|value| value.value.to_vec())
-    });
-    Some(SignedAttributes {
-        reencoded,
-        message_digest,
-    })
-}
-
-/// The serial number's content bytes in a DER certificate.
-fn certificate_serial(certificate: &[u8]) -> Option<&[u8]> {
-    let (certificate, _) = read_tlv(certificate)?;
-    let (tbs, _) = read_tlv(certificate.value)?;
-    let fields = children(tbs.value)?;
-    let serial_index = usize::from(fields.first()?.tag == 0xa0);
-    fields
-        .get(serial_index)
-        .filter(|serial| serial.tag == 0x02)
-        .map(|serial| serial.value)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -793,8 +531,8 @@ mod tests {
 
     #[test]
     fn garbage_blocks_do_not_parse() {
-        assert!(Pkcs7::parse(b"").is_none());
-        assert!(Pkcs7::parse(&[0x30, 0x84, 0xff, 0xff, 0xff, 0xff]).is_none());
+        assert!(cms::parse(b"").is_err());
+        assert!(cms::parse(&[0x30, 0x84, 0xff, 0xff, 0xff, 0xff]).is_err());
     }
 
     #[test]

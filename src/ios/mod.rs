@@ -11,9 +11,11 @@
 //! `docs/PORTING.md`.
 
 pub mod analysis;
+pub mod ats;
 mod binaries;
 mod info;
 mod ipa;
+pub mod profile;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
 pub use info::{BundleInfo, WrongType};

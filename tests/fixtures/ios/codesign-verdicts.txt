@@ -10,3 +10,5 @@ info-plist-after-signing: Fixture.app: invalid Info.plist (plist or signature ha
 info-plist-array: Fixture.app: code object is not signed at all
 info-plist-truncated: valid
 no-info-plist: valid
+profile-expired: valid
+profile-other-bundle: valid

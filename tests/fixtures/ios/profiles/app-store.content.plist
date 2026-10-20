@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AppIDName</key>
+	<string>Fixture</string>
+	<key>ApplicationIdentifierPrefix</key>
+	<array>
+		<string>A1B2C3D4E5</string>
+	</array>
+	<key>CreationDate</key>
+	<date>2026-01-01T00:00:00Z</date>
+	<key>DeveloperCertificates</key>
+	<array>
+		<data>
+		MIIDLzCCAhegAwIBAgIUKvE4gp8bKWzuxDAgTWqvtpXlgLswDQYJKoZIhvcN
+		AQELBQAwJzElMCMGA1UEAwwcbXNlYyBEZXZlbG9wbWVudCBDZXJ0aWZpY2F0
+		ZTAeFw0yNjEwMjAxNjMxMTNaFw0zNjEwMTcxNjMxMTNaMCcxJTAjBgNVBAMM
+		HG1zZWMgRGV2ZWxvcG1lbnQgQ2VydGlmaWNhdGUwggEiMA0GCSqGSIb3DQEB
+		AQUAA4IBDwAwggEKAoIBAQC+h3xqLl3bwZmUtAL3SOc0XRXeGGxcP4Z9LwWA
+		gcjO4Jqczm1vLGJokOm7DYEVK40HzdPcX5cIvF0YsElERSZUMv1ehh1J+Cme
+		LPhMPmon44yJ+qu2MoACfDOEy4k56f18rTqbIf24twCTXfhOqGwI0ukNiwpV
+		29XHwdzZijLolgDjPRtxFQ8D9dwNvyrT2XlOQhpxgpB6ryFCrHSuKsmtfAK9
+		5dSn1J1jTAO9wiwJse/tY8QJ4LyMxQiCc06sX+VPHhcV2FEo0sstWtoiYNh7
+		S2+ofxrUhLKAanHN/ixhUUxW7+q/n5HCHV8oL0t8RtCtXmYsPAypXLJ4pOpv
+		z1SnAgMBAAGjUzBRMB0GA1UdDgQWBBRfLNgSpDtTLNAUVmNiGHnV82ZuLzAf
+		BgNVHSMEGDAWgBRfLNgSpDtTLNAUVmNiGHnV82ZuLzAPBgNVHRMBAf8EBTAD
+		AQH/MA0GCSqGSIb3DQEBCwUAA4IBAQAe0gMernL8yrNACNFyqM95l3290qUC
+		0plAs3gl/fXt7A+TLH7Tk5F9L5gmmv4MMhBiw0jm5s2wy1lX4jIEDIP3DVaU
+		GWZsyXX1DumF750AVyih8jNyZ4H3VA6ut8Iqvar8Za6EUw9I3RXpTz15DBnG
+		D0/E5jT3oN1R2el6Jk1WZ21+uRS8jrF0b2nn6vJo289KtejdG2w6YkLbdRf0
+		7v6rBUbU6fVfpG0TTKJoUm7MDdCT/khqN/YWn4ypcLIElJV1sDG/OYD9faaY
+		L+r6pmZlS8ddhckUq82A/DUtcHkwGwgrARTj87b+mkXATs6mSSDmV29pqmkN
+		ERdFwtoTVATq
+		</data>
+	</array>
+	<key>Entitlements</key>
+	<dict>
+		<key>application-identifier</key>
+		<string>A1B2C3D4E5.dev.appchk.fixture</string>
+		<key>com.apple.developer.team-identifier</key>
+		<string>A1B2C3D4E5</string>
+		<key>get-task-allow</key>
+		<false/>
+		<key>keychain-access-groups</key>
+		<array>
+			<string>A1B2C3D4E5.*</string>
+		</array>
+	</dict>
+	<key>ExpirationDate</key>
+	<date>2036-01-01T00:00:00Z</date>
+	<key>IsXcodeManaged</key>
+	<false/>
+	<key>Name</key>
+	<string>Fixture App Store</string>
+	<key>Platform</key>
+	<array>
+		<string>iOS</string>
+	</array>
+	<key>TeamIdentifier</key>
+	<array>
+		<string>A1B2C3D4E5</string>
+	</array>
+	<key>TeamName</key>
+	<string>msec Fixture Team</string>
+	<key>TimeToLive</key>
+	<integer>3652</integer>
+	<key>UUID</key>
+	<string>00000000-0000-4000-8000-466978747572</string>
+	<key>Version</key>
+	<integer>1</integer>
+</dict>
+</plist>

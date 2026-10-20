@@ -233,10 +233,20 @@ VARIANTS = {
     "identifier-integer": lambda bundle: info_with(bundle, {"CFBundleIdentifier": 42}),
     "duplicate-identifier-xml": duplicate_identifier_xml,
     "duplicate-identifier-binary": duplicate_identifier_binary,
+    # Another provisioning profile (build_profiles.sh): expired, or for another app.
+    "profile-expired": lambda bundle: embed(bundle, "expired"),
+    "profile-other-bundle": lambda bundle: embed(bundle, "other-bundle"),
     # Changed after signing (see TAMPER): signed as built.
     "info-plist-after-signing": lambda bundle: None,
     "executable-after-signing": lambda bundle: None,
 }
+
+
+PROFILES = Path(__file__).resolve().parent / "profiles"
+
+
+def embed(bundle, profile):
+    shutil.copyfile(PROFILES / f"{profile}.mobileprovision", bundle / "embedded.mobileprovision")
 
 
 def bump_version(bundle):
