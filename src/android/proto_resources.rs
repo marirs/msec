@@ -89,6 +89,27 @@ impl ProtoTable {
         })
     }
 
+    pub(crate) fn ids_of_type(&self, type_name: &str) -> Vec<u32> {
+        let mut ids: Vec<u32> = self
+            .packages
+            .iter()
+            .flat_map(|package| {
+                package
+                    .types
+                    .iter()
+                    .filter(|kind| kind.name == type_name)
+                    .flat_map(move |kind| {
+                        kind.entries
+                            .iter()
+                            .map(move |entry| resource_id(package, kind, entry))
+                    })
+            })
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
+
     pub(crate) fn locales(&self) -> Vec<String> {
         let mut locales = BTreeSet::new();
         let strings = self

@@ -17,3 +17,8 @@ files, licensed under the Apache License 2.0: the SDK's public-final.xml (attrib
 and api-versions.xml (API levels that deprecated or removed framework classes, methods and
 fields), and frameworks/base core/res AndroidManifest.xml and strings.xml (permissions,
 protection levels and labels). Copyright (C) The Android Open Source Project.
+
+Secret detection rules (src/secrets/generated/gitleaks.rs) are generated from gitleaks' default
+configuration (config/gitleaks.toml, release v8.30.1, https://github.com/gitleaks/gitleaks),
+Copyright (c) 2019 Zachary Rice, MIT License; the full license text is in
+src/secrets/generated/GITLEAKS-LICENSE.

@@ -17,4 +17,5 @@ fuzz_target!(|data: &[u8]| {
         let _ = base.manifest_findings();
         let _ = base.store_findings("2026-10-14");
     }
+    let _ = msec::secrets::android::scan_bundle(&mut archive, &bundle);
 });

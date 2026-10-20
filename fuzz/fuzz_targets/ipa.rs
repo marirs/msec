@@ -1,5 +1,5 @@
 //! The IPA reader: locating the app bundle, its Info.plist and those of its components, and
-//! the privacy manifests, on whatever archive libFuzzer makes.
+//! the privacy manifests, then the secret scan, on whatever archive libFuzzer makes.
 #![no_main]
 
 use std::io::Cursor;
@@ -17,4 +17,5 @@ fuzz_target!(|data: &[u8]| {
         let _ = app.components.len() + app.privacy_manifests.len();
         let _ = ipa.problems.iter().filter(|problem| problem.rejected_by_ios()).count();
     }
+    let _ = msec::secrets::ios::scan_ipa(&mut archive, &ipa);
 });

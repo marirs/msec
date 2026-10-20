@@ -39,6 +39,8 @@
 //! - [`cms`]: CMS (PKCS#7) SignedData, BER or DER, with signature verification; used by JAR
 //!   signatures and by provisioning profiles ([`ios::profile`]).
 //! - [`ios::ats`]: App Transport Security with Apple's documented semantics.
+//! - [`secrets`]: hardcoded secrets in APKs, app bundles and IPAs: MobSF's known formats and
+//!   heuristics plus gitleaks' rules, reported redacted.
 //!
 //! See the repository README for the porting roadmap.
 //!
@@ -54,6 +56,7 @@ pub mod macho;
 pub mod magic;
 pub mod plist;
 pub mod scan_type;
+pub mod secrets;
 
 pub use hashes::FileHashes;
 pub use scan_type::{Platform, ScanType, UnsupportedReason};

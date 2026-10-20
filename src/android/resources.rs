@@ -441,6 +441,15 @@ impl ResourceTable {
         }
     }
 
+    /// Resource IDs of every entry of a type (`string`), in package, type and entry order, each
+    /// once.
+    pub fn ids_of_type(&self, type_name: &str) -> Vec<u32> {
+        match &self.source {
+            TableSource::Arsc(table) => table.ids_of_type(type_name),
+            TableSource::Protobuf(table) => table.ids_of_type(type_name),
+        }
+    }
+
     /// Locales the app's strings are translated into, sorted (`de`, `en-GB`, `ja`).
     pub fn locales(&self) -> Vec<String> {
         match &self.source {
@@ -554,6 +563,37 @@ impl ArscTable {
                     })
                 })
         })
+    }
+
+    fn ids_of_type(&self, type_name: &str) -> Vec<u32> {
+        let mut ids = BTreeSet::new();
+        for package in &self.packages {
+            for chunk in &package.types {
+                if self.type_name(package, chunk.type_id).as_deref() != Some(type_name) {
+                    continue;
+                }
+                for entry_index in self.entry_indexes(chunk) {
+                    ids.insert(
+                        (package.id << 24) | (u32::from(chunk.type_id) << 16) | entry_index as u32,
+                    );
+                }
+            }
+        }
+        ids.into_iter().collect()
+    }
+
+    /// Entry indexes a type chunk holds a value for: the `(index, offset)` pairs of a sparse
+    /// chunk, every index with an offset otherwise.
+    fn entry_indexes(&self, chunk: &TypeChunk) -> Vec<usize> {
+        if chunk.flags & TYPE_FLAG_SPARSE != 0 {
+            return (0..chunk.entry_count)
+                .filter_map(|pair| u16_at(&self.bytes, chunk.offsets_start + pair * 4))
+                .map(usize::from)
+                .collect();
+        }
+        (0..chunk.entry_count)
+            .filter(|&entry_index| self.entry_position(chunk, entry_index).is_some())
+            .collect()
     }
 
     /// Locales the app's strings are translated into, sorted (`de`, `en-GB`, `ja`).

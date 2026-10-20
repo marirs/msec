@@ -37,7 +37,8 @@ security models (`binary_xml`), the resource table (`resource_table`), ELF with 
 (`elf`), X.509 certificates (`certificate`), DEX files (`dex`), aapt2's protobuf XML
 (`protobuf_xml`) and resource table (`protobuf_resources`), a whole APK through every analysis
 (`apk`), a whole app bundle (`bundle`), property lists (`plist`), Mach-O files (`macho`) and a
-whole IPA (`ipa`) and provisioning profiles with their CMS signature (`profile`).
+whole IPA (`ipa`), provisioning profiles with their CMS signature (`profile`) and the secret
+detectors (`secrets`).
 Seeds come from this repository's fixtures. `scripts/fuzz.sh` runs each for a time budget (60
 seconds by default; `FUZZ_SECONDS=600 scripts/fuzz.sh apk` for more) with a 10-second per-input
 timeout and a 2 GB memory limit; CI runs it on every change and daily. It needs a nightly

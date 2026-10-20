@@ -1,0 +1,199 @@
+//! Secrets in an IPA's app bundle: property lists (MobSF `ios/plist_analysis.py::
+//! get_plist_secrets`), the C strings of every executable (MobSF `ios/strings.py` reads the main
+//! executable's, frameworks' and libraries' strings), and the bundle's other text files, which
+//! MobSF reads for URLs only.
+
+use std::collections::HashSet;
+use std::io::{Read, Seek};
+
+use super::strings::{as_text, c_strings, printable_runs};
+use super::{Collector, MAX_TEXT_BYTES, MAX_TEXT_FILE_BYTES, SecretScan, ValueChecks};
+use crate::archive::ZipArchive;
+use crate::ios::{BundleBinary, Ipa};
+use crate::plist::{self, Value};
+
+/// Files in a bundle that are never text, or whose text is signatures and hashes.
+const SKIPPED_EXTENSIONS: [&str; 22] = [
+    "car",
+    "nib",
+    "storyboardc",
+    "mobileprovision",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "heic",
+    "pdf",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "mp3",
+    "mp4",
+    "m4a",
+    "caf",
+    "wav",
+    "mov",
+    "mlmodelc",
+    "dylib",
+];
+
+/// Secrets in the IPA's app bundle; an empty scan without one.
+pub fn scan_ipa<R: Read + Seek>(archive: &mut ZipArchive<R>, ipa: &Ipa) -> SecretScan {
+    let mut collector = Collector::new();
+    let Some(app) = &ipa.app else {
+        return collector.finish();
+    };
+    let entries: Vec<(usize, String, u64)> = archive
+        .entries()
+        .iter()
+        .filter(|entry| !entry.is_directory && entry.name.starts_with(&app.path))
+        .map(|entry| (entry.index, entry.name.clone(), entry.uncompressed_size))
+        .collect();
+    for (index, path, size) in entries {
+        collector.file_name(&path);
+        if let Some(binary) = app.binaries.iter().find(|binary| binary.path == path) {
+            executable_strings(&mut collector, archive, binary);
+            continue;
+        }
+        if path.contains("/_CodeSignature/") || skipped_extension(&path) {
+            continue;
+        }
+        if size > MAX_TEXT_FILE_BYTES {
+            collector.skip(
+                &path,
+                format!("{size} bytes: larger than the text file limit"),
+            );
+            continue;
+        }
+        if collector.text_bytes + size > MAX_TEXT_BYTES {
+            collector.skip(&path, "the text budget for this package was spent");
+            continue;
+        }
+        collector.text_bytes += size;
+        let bytes = match archive.read(index) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                collector.skip(&path, error.to_string());
+                continue;
+            }
+        };
+        if path.ends_with(".plist")
+            && let Ok(parsed) = plist::parse(&bytes)
+        {
+            property_list(&mut collector, &path, &parsed.root);
+        } else if let Some(text) = as_text(&bytes) {
+            collector.text_file(&path, &text);
+        }
+    }
+    collector.finish()
+}
+
+fn skipped_extension(path: &str) -> bool {
+    path.rsplit_once('.').is_some_and(|(_, extension)| {
+        SKIPPED_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+    })
+}
+
+/// Every string in a property list: known formats, and MobSF's key-name heuristic on the key
+/// it is stored under. The walk keeps its own stack: property lists nest up to 513 levels.
+fn property_list(collector: &mut Collector, location: &str, root: &Value) {
+    collector.counts().property_lists += 1;
+    let mut stack: Vec<(String, Option<String>, &Value)> = vec![(String::new(), None, root)];
+    while let Some((path, key, value)) = stack.pop() {
+        match value {
+            Value::String(text) => {
+                if text.is_empty() {
+                    continue;
+                }
+                collector.value(
+                    location,
+                    (!path.is_empty()).then_some(path.as_str()),
+                    text,
+                    ValueChecks {
+                        key: key.as_deref(),
+                        entropy: false,
+                    },
+                );
+            }
+            Value::Dictionary(dictionary) => {
+                // Reversed, so the walk visits keys in the order the file lists them.
+                let children: Vec<_> = dictionary.iter().collect();
+                for (child_key, child) in children.into_iter().rev() {
+                    let child_path = if path.is_empty() {
+                        child_key.to_owned()
+                    } else {
+                        format!("{path}/{child_key}")
+                    };
+                    stack.push((child_path, Some(child_key.to_owned()), child));
+                }
+            }
+            Value::Array(items) | Value::Set(items) => {
+                for (position, item) in items.iter().enumerate().rev() {
+                    stack.push((format!("{path}[{position}]"), key.clone(), item));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// C strings (`__TEXT,__cstring`) of every architecture of an executable; printable runs of
+/// the whole file when it is not Mach-O. Known formats and MobSF's entropy heuristic.
+fn executable_strings<R: Read + Seek>(
+    collector: &mut Collector,
+    archive: &mut ZipArchive<R>,
+    binary: &BundleBinary,
+) {
+    let bytes = match archive.read_by_name(&binary.path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return,
+        Err(error) => {
+            collector.skip(&binary.path, error.to_string());
+            return;
+        }
+    };
+    let mut strings: Vec<String> = Vec::new();
+    match &binary.macho {
+        Ok(file) => {
+            for slice in &file.slices {
+                let Ok(image) = &slice.image else {
+                    continue;
+                };
+                let sections = image
+                    .segments
+                    .iter()
+                    .flat_map(|segment| &segment.sections)
+                    .filter(|section| section.segment == "__TEXT" && section.name == "__cstring");
+                for section in sections {
+                    let start = slice.offset.saturating_add(u64::from(section.offset));
+                    let Some(data) = usize::try_from(start)
+                        .ok()
+                        .zip(usize::try_from(section.size).ok())
+                        .and_then(|(start, size)| bytes.get(start..start.checked_add(size)?))
+                    else {
+                        continue;
+                    };
+                    strings.extend(c_strings(data));
+                }
+            }
+        }
+        Err(_) => strings = printable_runs(&bytes),
+    }
+    let mut seen: HashSet<String> = HashSet::new();
+    for string in strings {
+        if !seen.insert(string.clone()) {
+            continue;
+        }
+        collector.counts().binary_strings += 1;
+        collector.value(
+            &binary.path,
+            None,
+            &string,
+            ValueChecks {
+                key: None,
+                entropy: true,
+            },
+        );
+    }
+}

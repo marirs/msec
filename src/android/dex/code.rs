@@ -1,11 +1,13 @@
 //! Method, field and proto IDs, and the references each method's code makes: which framework or
 //! app methods it calls (`invoke-*`), which fields it reads or writes (`iget`/`iput`/`sget`/
-//! `sput`), and which types it instantiates or checks (`new-instance`, `const-class`, ...).
-//! What a code rule needs to say "this app calls `Window.setStatusBarColor`, from these
-//! methods".
+//! `sput`), which types it instantiates or checks (`new-instance`, `const-class`, ...), and
+//! which strings it loads (`const-string`, `const-string/jumbo`). What a code rule needs to say
+//! "this app calls `Window.setStatusBarColor`, from these methods", and what the secret
+//! detectors need to name the class a hardcoded key is in.
 //!
 //! Only instruction widths and the index operand of referencing instructions are decoded
-//! (formats 21c, 22c, 35c, 3rc, 45cc, 4rcc of the Dalvik bytecode spec); there is no data flow.
+//! (formats 21c, 22c, 31c, 35c, 3rc, 45cc, 4rcc of the Dalvik bytecode spec); there is no data
+//! flow.
 //! Work is bounded like the rest of the reader: class data and code items may be shared or
 //! overlap in a hostile file, so every member read, code unit scanned and reference recorded is
 //! charged to a budget of the file's size ([`DexAnomalyKind::CodeBudgetExhausted`]).
@@ -18,6 +20,8 @@ use crate::android::chunk::{u16_at, u32_at};
 /// `proto_id_item`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct ProtoId {
+    /// String ID of the shorty descriptor (`VL`).
+    pub(super) shorty: u32,
     /// Type ID of the return type.
     pub(super) return_type: u32,
     /// Range of its parameter type IDs in the file's type-list entries.
@@ -84,6 +88,24 @@ const WIDTHS: [u8; 256] = {
     widths
 };
 
+/// What an instruction's index operand names: a method, field or type, or a string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Operand {
+    Target(Target),
+    /// A string ID (`const-string`, `const-string/jumbo`).
+    String(u32),
+}
+
+/// The string a `const-string` (21c, index in the second unit) or `const-string/jumbo` (31c,
+/// index in the second and third units) loads.
+fn string_of(opcode: u8, unit: impl Fn(usize) -> u16) -> Option<u32> {
+    match opcode {
+        0x1a => Some(u32::from(unit(1))),
+        0x1b => Some(u32::from(unit(1)) | (u32::from(unit(2)) << 16)),
+        _ => None,
+    }
+}
+
 /// What a referencing instruction's index operand (the second code unit) names.
 fn target_of(opcode: u8, index: u32) -> Option<Target> {
     match opcode {
@@ -117,6 +139,7 @@ pub(super) fn read_ids(
             .map(|index| {
                 let at = protos.offset as usize + 12 * index;
                 ProtoId {
+                    shorty: u32_field(at),
                     return_type: u32_field(at + 4),
                     parameters: read_type_list(u32_field(at + 8)).unwrap_or((0, 0)),
                 }
@@ -155,12 +178,15 @@ pub(super) struct CodeScan<'data> {
     pub(super) method_count: u32,
     pub(super) field_count: u32,
     pub(super) type_count: u32,
+    pub(super) string_count: u32,
     /// Work still allowed in this container ([`super::Budgets::code_work`]).
     pub(super) budget: &'data mut usize,
-    /// Targets of each code item already scanned, by offset: ranges in `targets`.
+    /// Operands of each code item already scanned, by offset: ranges in `operands`.
     by_offset: HashMap<u32, (usize, usize)>,
-    targets: Vec<Target>,
+    operands: Vec<Operand>,
     pub(super) references: BTreeSet<Reference>,
+    /// (method ID, string ID) for every string a method's code loads.
+    pub(super) string_uses: BTreeSet<(u32, u32)>,
     /// Methods with code read.
     pub(super) methods_with_code: usize,
     /// Method IDs of every method the classes define (with or without code), in class order.
@@ -176,7 +202,7 @@ impl<'data> CodeScan<'data> {
     pub(super) fn new(
         bytes: &'data [u8],
         bounds: (usize, usize),
-        counts: (u32, u32, u32),
+        counts: (u32, u32, u32, u32),
         budget: &'data mut usize,
     ) -> Self {
         Self {
@@ -185,10 +211,12 @@ impl<'data> CodeScan<'data> {
             method_count: counts.0,
             field_count: counts.1,
             type_count: counts.2,
+            string_count: counts.3,
             budget,
             by_offset: HashMap::new(),
-            targets: Vec::new(),
+            operands: Vec::new(),
             references: BTreeSet::new(),
+            string_uses: BTreeSet::new(),
             methods_with_code: 0,
             defined_methods: Vec::new(),
         }
@@ -283,19 +311,26 @@ impl<'data> CodeScan<'data> {
                 Err(problem) => return Err(problem),
             },
         };
-        // Attaching a shared code item's targets to another method costs too.
+        // Attaching a shared code item's operands to another method costs too.
         self.charge(length)?;
         self.methods_with_code += 1;
         for index in start..start + length {
-            self.references.insert(Reference {
-                caller: method,
-                target: self.targets[index],
-            });
+            match self.operands[index] {
+                Operand::Target(target) => {
+                    self.references.insert(Reference {
+                        caller: method,
+                        target,
+                    });
+                }
+                Operand::String(string) => {
+                    self.string_uses.insert((method, string));
+                }
+            }
         }
         Ok(())
     }
 
-    /// Scans the `code_item` at `offset`, returning the range of its distinct targets.
+    /// Scans the `code_item` at `offset`, returning the range of its distinct operands.
     fn scan(&mut self, offset: u32) -> Result<(usize, usize), CodeProblem> {
         let (lower, upper) = self.bounds;
         let at = offset as usize;
@@ -311,7 +346,7 @@ impl<'data> CodeScan<'data> {
         let unit = |index: usize| -> u16 {
             u16_at(self.bytes, start + 2 * index).expect("the code item was bounds-checked")
         };
-        let mut found: BTreeSet<Target> = BTreeSet::new();
+        let mut found: BTreeSet<Operand> = BTreeSet::new();
         let mut position = 0;
         while position < units {
             let first = unit(position);
@@ -338,12 +373,18 @@ impl<'data> CodeScan<'data> {
                 if index >= count {
                     return Err(CodeProblem::Invalid);
                 }
-                found.insert(target);
+                found.insert(Operand::Target(target));
+            }
+            if let Some(string) = string_of(opcode, |index| unit(position + index)) {
+                if string >= self.string_count {
+                    return Err(CodeProblem::Invalid);
+                }
+                found.insert(Operand::String(string));
             }
             position += width;
         }
-        let range = (self.targets.len(), found.len());
-        self.targets.extend(found);
+        let range = (self.operands.len(), found.len());
+        self.operands.extend(found);
         self.by_offset.insert(offset, range);
         Ok(range)
     }

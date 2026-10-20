@@ -13,6 +13,7 @@ exclude = [".github/", "fuzz/"]
 
 [dependencies]
 adler2 = "2.0.1"
+aho-corasick = "1.1.5"
 crc32fast = "1.5.2"
 der = { version = "0.8.2", features = ["derive", "oid"] }
 dsa = "0.7.0"
@@ -22,6 +23,7 @@ md-5 = "0.11.0"
 p256 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
 p384 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
 p521 = { version = "0.14.0", default-features = false, features = ["ecdsa", "pkcs8"] }
+regex = { version = "1.13.1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
 # Pinned exactly: the 0.10 line (digest 0.11, matching sha2 0.11) is still a release candidate.
 rsa = { version = "=0.10.0-rc.19", default-features = false, features = ["std", "encoding"] }
 sha1 = "0.11.0"

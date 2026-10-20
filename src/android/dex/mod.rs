@@ -421,6 +421,8 @@ pub struct DexFile {
     methods: Vec<MemberId>,
     /// What each method's code refers to, once per (caller, target), sorted by caller.
     references: Vec<Reference>,
+    /// (method ID, string ID) for each string a method's code loads, sorted.
+    string_uses: Vec<(u32, u32)>,
     methods_with_code: usize,
     /// Method IDs of the methods the file's classes define.
     defined_methods: Vec<u32>,
@@ -555,6 +557,7 @@ impl DexFile {
             fields: Vec::new(),
             methods: Vec::new(),
             references: Vec::new(),
+            string_uses: Vec::new(),
             methods_with_code: 0,
             defined_methods: Vec::new(),
         };
@@ -624,10 +627,13 @@ impl DexFile {
         if self.methods.is_empty() && self.header.method_ids.count > 0 {
             return;
         }
+        // Strings are checked against the header's count, as ART does: a string table that
+        // could not be read must not make every const-string look invalid.
         let counts = (
             self.methods.len() as u32,
             self.fields.len() as u32,
             self.types.len() as u32,
+            self.header.string_ids.count,
         );
         let mut scan = CodeScan::new(bytes, bounds, counts, budget);
         for (position, class) in self.classes.iter().enumerate() {
@@ -640,6 +646,7 @@ impl DexFile {
         self.methods_with_code = scan.methods_with_code;
         self.defined_methods = scan.defined_methods;
         self.references = scan.references.into_iter().collect();
+        self.string_uses = scan.string_uses.into_iter().collect();
     }
 
     /// Reads the class definitions, their interface lists, and checks for redefinitions.
@@ -795,6 +802,44 @@ impl DexFile {
     /// What each method's code refers to, once per (caller, target), sorted by caller.
     pub fn references(&self) -> &[Reference] {
         &self.references
+    }
+
+    /// (method ID, string ID) for each string a method's code loads (`const-string`), sorted.
+    pub fn string_uses(&self) -> &[(u32, u32)] {
+        &self.string_uses
+    }
+
+    /// Strings that are data rather than names: every string ID except type descriptors,
+    /// field and method names, proto shorties and source file names, with the first method
+    /// whose code loads it (`None` for strings held only in static field values, annotations
+    /// or debug information). In ID order.
+    pub fn literal_strings(&self) -> Vec<(u32, Option<u32>)> {
+        let mut identifiers = vec![false; self.strings.len()];
+        let mut mark = |index: u32| {
+            if let Some(slot) = identifiers.get_mut(index as usize) {
+                *slot = true;
+            }
+        };
+        self.types.iter().for_each(|&descriptor| mark(descriptor));
+        self.fields.iter().for_each(|field| mark(field.name));
+        self.methods.iter().for_each(|method| mark(method.name));
+        self.protos.iter().for_each(|proto| mark(proto.shorty));
+        self.classes
+            .iter()
+            .filter_map(|class| class.source_file)
+            .for_each(&mut mark);
+        let mut first_caller: Vec<Option<u32>> = vec![None; self.strings.len()];
+        for &(method, string) in &self.string_uses {
+            if let Some(slot) = first_caller.get_mut(string as usize)
+                && slot.is_none()
+            {
+                *slot = Some(method);
+            }
+        }
+        (0..self.strings.len() as u32)
+            .filter(|&index| !identifiers[index as usize])
+            .map(|index| (index, first_caller[index as usize]))
+            .collect()
     }
 
     /// Descriptor of the class declaring a method (`Landroid/view/Window;`).
