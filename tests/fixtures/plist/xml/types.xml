@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>strings</key>
+	<array>
+		<string>x &amp; &lt;y&gt; "q" 'a' é 😀</string>
+		<string></string>
+		<string/>
+		<string>  spaces kept  </string>
+		<string><![CDATA[a<b>&c]]>d</string>
+		<string>&#65;&#x42;&#x1F600;&quot;&apos;</string>
+		<key>a key outside a dictionary is a string</key>
+	</array>
+	<key>integers</key>
+	<array>
+		<integer>0</integer>
+		<integer>-1</integer>
+		<integer>9223372036854775807</integer>
+		<integer>-9223372036854775808</integer>
+		<integer>18446744073709551615</integer>
+		<integer>0x10</integer>
+		<integer>-0x10</integer>
+		<integer>+ 7</integer>
+		<integer>
+		5</integer>
+	</array>
+	<key>reals</key>
+	<array>
+		<real>3.14</real>
+		<real>1</real>
+		<real>1e300</real>
+		<real>5e-324</real>
+		<real>-0</real>
+		<real>inf</real>
+		<real>-infinity</real>
+		<real>NaN</real>
+		<real>.5</real>
+		<real> 1E5</real>
+		<real>123.456</real>
+		<real>1e-400</real>
+	</array>
+	<key>booleans</key>
+	<array>
+		<true/>
+		<false></false>
+		<true />
+	</array>
+	<key>dates</key>
+	<array>
+		<date>2001-01-01T00:00:00Z</date>
+		<date>1970-01-01T00:00:00Z</date>
+		<date>2026-13-02T03:04:05Z</date>
+		<date>2025-02-29T25:04:05Z</date>
+		<date>0000-01-01T00:00:00Z</date>
+		<date>-001-01-01T00:00:00Z</date>
+		<date>12026-01-02T03:04:05Z</date>
+	</array>
+	<key>data</key>
+	<array>
+		<data>AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiYw==</data>
+		<data></data>
+		<data> AA EC
+		Aw== </data>
+		<data>AA==AAEC</data>
+		<data>AAE</data>
+		<data>!!!!</data>
+	</array>
+	<key>deep data</key>
+	<array><array><array><array><array><array><array><array><array><array><array>
+		<data>QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD</data>
+	</array></array></array></array></array></array></array></array></array></array></array>
+	<key>empty</key>
+	<array>
+		<array/>
+		<array></array>
+		<dict/>
+		<dict></dict>
+	</array>
+	<!-- a comment between a key and its value -->
+	<key>sorted keys</key>
+	<dict>
+		<key>b</key><true/>
+		<key>B</key><true/>
+		<key>a</key><true/>
+		<key>é</key><true/>
+		<key>😀</key><true/>
+		<key>Ａ</key><true/>
+		<key>_</key><true/>
+		<key>10</key><true/>
+		<key>9</key><true/>
+		<key></key><true/>
+		<key>a&amp;b</key><true/>
+		<key><![CDATA[c]]></key><true/>
+	</dict>
+	<?processing instruction?>
+	<key>uid-shaped</key>
+	<dict>
+		<key>CF$UID</key>
+		<integer>3</integer>
+	</dict>
+</dict>
+</plist>

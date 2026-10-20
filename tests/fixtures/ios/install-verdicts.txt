@@ -1,0 +1,10 @@
+duplicate-identifier-binary: refused: Mismatched bundle IDs.
+duplicate-identifier-xml: installed as dev.appchk.fixture
+executable-missing: refused: Fixture.app is missing its bundle executable. Please check your build settings to make sure that a bundle executable is produced at the path "Fixture.app/Missing".
+executable-not-declared: refused: Bundle at path Fixture.app has missing or invalid CFBundleExecutable in its Info.plist
+executable-traversal: refused: Root sinf URL points outside of bundle
+fixture: installed as dev.appchk.fixture
+identifier-integer: refused: Missing bundle ID.
+info-plist-array: refused: Missing bundle ID.
+info-plist-truncated: refused: Missing bundle ID.
+no-info-plist: refused: Missing bundle ID.

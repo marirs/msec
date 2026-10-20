@@ -87,3 +87,17 @@ path = "fuzz_targets/apk.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "plist"
+path = "fuzz_targets/plist.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ipa"
+path = "fuzz_targets/ipa.rs"
+test = false
+doc = false
+bench = false

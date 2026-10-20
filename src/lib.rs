@@ -28,8 +28,13 @@
 //!   [`android::ResourceTable::parse_proto`]), DEX files and native libraries, with the base
 //!   module readable as an APK by every check.
 //!
-//! Android manifest, certificate, network-security-config and binary analysis follow in the
-//! next releases. See the repository README for the porting roadmap.
+//! - [`plist`]: property lists, binary and XML, read with Core Foundation's rules (duplicate
+//!   keys, nesting limits, number and date parsing), checked against `plutil`.
+//! - [`ios::Ipa`]: iOS packages: the app bundle, `Info.plist`, embedded frameworks, app
+//!   extensions and privacy manifests.
+//!
+//! iOS binary analysis (Mach-O, code signatures, entitlements) follows next. See the
+//! repository README for the porting roadmap.
 //!
 //! msec is an independent port and is not affiliated with or endorsed by the MobSF project.
 
@@ -37,7 +42,9 @@ pub mod android;
 pub mod archive;
 pub mod elf;
 pub mod hashes;
+pub mod ios;
 pub mod magic;
+pub mod plist;
 pub mod scan_type;
 
 pub use hashes::FileHashes;

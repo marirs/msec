@@ -379,13 +379,12 @@ pub fn analyse_code(
         FormFactor::of(manifest) == FormFactor::PhoneTablet && !is_game(manifest_document);
     if restoration_applies && let Some((api, callers)) = sign_in_without_restoration(&calls.direct)
     {
-        let detail = format!(
-            "signs users in ({}) and makes no Restore Credentials or Block Store call. From April \
-             2027 Google Play requires apps with sign-in to restore it on a new device without \
-             user action (phones and tablets); Block Store integrations in production by 30 \
-             September 2026 also count",
-            java_like(api)
-        );
+        // The sign-in API is the finding's `api`, so the detail does not repeat it.
+        let detail = "signs users in and makes no Restore Credentials or Block Store call. From \
+                      April 2027 Google Play requires apps with sign-in to restore it on a new \
+                      device without user action (phones and tablets); Block Store integrations \
+                      in production by 30 September 2026 also count"
+            .to_owned();
         findings.push(calls.finding(
             CodeRule::SignInRestorationMissing,
             Some(api),
@@ -485,22 +484,6 @@ fn sign_in_without_restoration(
         .collect();
     sign_ins.sort_by(|left, right| left.0.cmp(right.0));
     sign_ins.into_iter().next()
-}
-
-/// `Landroid/accounts/AccountManager;->addAccountExplicitly(...)Z` as
-/// `android.accounts.AccountManager.addAccountExplicitly`, for details.
-fn java_like(signature: &str) -> String {
-    let (class, member) = signature.split_once("->").unwrap_or((signature, ""));
-    let class = class
-        .trim_start_matches('L')
-        .trim_end_matches(';')
-        .replace(['/', '$'], ".");
-    let name = member.split('(').next().unwrap_or_default();
-    if name.is_empty() {
-        class
-    } else {
-        format!("{class}.{name}")
-    }
 }
 
 /// A finding about the app as a whole, not an API.

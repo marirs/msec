@@ -1,0 +1,68 @@
+# Files of ipa/fixture.ipa's bundle
+Fixture.app/Fixture
+Fixture.app/Frameworks/Lib.framework/Info.plist
+Fixture.app/Frameworks/Lib.framework/Lib
+Fixture.app/Frameworks/Lib.framework/PrivacyInfo.xcprivacy
+Fixture.app/Frameworks/Lib.framework/_CodeSignature/CodeResources
+Fixture.app/Frameworks/libextra.dylib
+Fixture.app/Info.plist
+Fixture.app/PlugIns/Share.appex/Info.plist
+Fixture.app/PlugIns/Share.appex/Share
+Fixture.app/PlugIns/Share.appex/_CodeSignature/CodeResources
+Fixture.app/PrivacyInfo.xcprivacy
+Fixture.app/_CodeSignature/CodeResources
+Fixture.app/en.lproj/InfoPlist.strings
+# plutil -p Fixture.app/Info.plist
+{
+  "CFBundleDevelopmentRegion" => "en"
+  "CFBundleDisplayName" => "Fixture"
+  "CFBundleExecutable" => "Fixture"
+  "CFBundleIdentifier" => "dev.appchk.fixture"
+  "CFBundleInfoDictionaryVersion" => "6.0"
+  "CFBundleName" => "Fixture"
+  "CFBundlePackageType" => "APPL"
+  "CFBundleShortVersionString" => "2.1"
+  "CFBundleSupportedPlatforms" => [
+    0 => "iPhoneOS"
+  ]
+  "CFBundleURLTypes" => [
+    0 => {
+      "CFBundleURLName" => "dev.appchk.fixture"
+      "CFBundleURLSchemes" => [
+        0 => "fixture"
+      ]
+    }
+  ]
+  "CFBundleVersion" => "42"
+  "DTPlatformName" => "iphoneos"
+  "DTSDKName" => "iphoneos27.1"
+  "DTXcode" => "2710"
+  "ITSAppUsesNonExemptEncryption" => false
+  "LSApplicationQueriesSchemes" => [
+    0 => "whatsapp"
+  ]
+  "LSRequiresIPhoneOS" => true
+  "MinimumOSVersion" => "17.0"
+  "NSAppTransportSecurity" => {
+    "NSAllowsArbitraryLoads" => true
+    "NSExceptionDomains" => {
+      "example.com" => {
+        "NSExceptionMinimumTLSVersion" => "TLSv1.0"
+        "NSIncludesSubdomains" => true
+      }
+    }
+  }
+  "NSCameraUsageDescription" => "Scans documents."
+  "NSLocationWhenInUseUsageDescription" => "Finds stores nearby."
+  "UIBackgroundModes" => [
+    0 => "location"
+  ]
+  "UIDeviceFamily" => [
+    0 => 1
+    1 => 2
+  ]
+  "UIFileSharingEnabled" => true
+  "UIRequiredDeviceCapabilities" => [
+    0 => "arm64"
+  ]
+}

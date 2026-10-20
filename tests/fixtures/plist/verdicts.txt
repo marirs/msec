@@ -1,0 +1,110 @@
+xml/attributes-ignored.xml: accepted
+xml/bare-ampersand.xml: rejected: (Encountered unknown ampersand-escape sequence at line 1)
+xml/byte-order-mark.xml: accepted
+xml/character-reference-surrogate.xml: rejected: (Encountered unparseable Unicode sequence at line 1 while parsing data (input did not result in a real string))
+xml/character-reference-too-large.xml: rejected: (Encountered unparseable Unicode sequence at line 1 while parsing data (input did not result in a real string))
+xml/character-reference-zero.xml: accepted
+xml/close-tag-whitespace.xml: accepted
+xml/comment-in-string.xml: rejected: (Encountered improper CDATA opening at line 1)
+xml/comments-and-instructions.xml: accepted
+xml/data-self-closed.xml: rejected: (Encountered empty <data> on line 1)
+xml/date-empty.xml: rejected: (Could not interpret <date> at line 1)
+xml/date-fraction.xml: rejected: (Could not interpret <date> at line 1)
+xml/date-offset.xml: rejected: (Could not interpret <date> at line 1)
+xml/date-one-digit-month.xml: rejected: (Could not interpret <date> at line 1)
+xml/depth-511.xml: accepted
+xml/depth-512.xml: rejected: (Too many nested arrays or dictionaries, failing on line 1)
+xml/dictionary-odd.xml: rejected: (Value missing for key inside <dict> at line 1)
+xml/dictionary-value-without-key.xml: rejected: (Found non-key inside <dict> at line 1)
+xml/doctype-internal-subset.xml: rejected: (Encountered unexpected character [ on line 2 while parsing DTD)
+xml/doctype-without-subset.xml: accepted
+xml/duplicate-key.xml: accepted
+xml/element-in-string.xml: rejected: (Encountered unexpected character s on line 1 while looking for close tag)
+xml/empty-plist.xml: rejected: (Encountered empty plist tag)
+xml/entity-expansion.xml: rejected: (Encountered unexpected character [ on line 2 while parsing DTD)
+xml/info.xml: accepted
+xml/integer-empty.xml: rejected: (Encountered empty <integer> on line 1)
+xml/integer-hex-digit.xml: rejected: (Hex digit in non-hex <integer> on line 1)
+xml/integer-incomplete.xml: rejected: (Incomplete <integer> on line 1)
+xml/integer-overflow.xml: rejected: (Integer overflow in <integer> on line 1)
+xml/integer-self-closed.xml: rejected: (Encountered empty <integer> on line 1)
+xml/integer-trailing-space.xml: rejected: (Unknown character ' ' (0x20) in <integer> on line 1)
+xml/integer-underflow.xml: rejected: (Integer underflow in <integer> on line 1)
+xml/invalid-utf8.xml: rejected: (Unable to convert string to correct encoding)
+xml/latin1.xml: accepted
+xml/less-than-in-text.xml: rejected: (Encountered unexpected character   on line 1 while looking for close tag)
+xml/mismatched-close.xml: rejected: (Close tag on line 1 does not match open tag string)
+xml/no-plist-element.xml: accepted
+xml/openstep.xml: accepted
+xml/prefixed-tag.xml: rejected: (Encountered unknown tag a:string on line 1)
+xml/quote-in-attribute.xml: rejected: (Encountered unexpected character b on line 1 while looking for open tag)
+xml/real-empty.xml: rejected: (Encountered misformatted real on line 1)
+xml/real-hex.xml: rejected: (Encountered misformatted real on line 1)
+xml/real-signed-nan.xml: rejected: (Encountered misformatted real on line 1)
+xml/real-trailing.xml: rejected: (Encountered misformatted real on line 1)
+xml/self-closed-plist.xml: rejected: (Encountered empty plist tag)
+xml/shift-jis.xml: accepted
+xml/text-in-plist.xml: rejected: (Encountered unexpected character j on line 1 while looking for open tag)
+xml/trailing-content.xml: accepted
+xml/true-with-text.xml: rejected: (Encountered non-empty <true> on line 1)
+xml/two-roots.xml: rejected: (Encountered unexpected element at line 1 (plist can only include one object))
+xml/types.xml: accepted
+xml/unclosed.xml: rejected: (Encountered unexpected EOF)
+xml/unknown-entity.xml: rejected: (Encountered unknown ampersand-escape sequence at line 1)
+xml/unknown-tag.xml: rejected: (Encountered unknown tag foo on line 1)
+xml/upper-case-tag.xml: rejected: (Encountered unknown tag String on line 1)
+xml/utf16.xml: accepted
+xml/whitespace-before-root.xml: accepted
+binary/array-count-past-area.bplist: rejected: (Unexpected character b at line 1)
+binary/count-overflow.bplist: rejected: (Unexpected character b at line 1)
+binary/cycle.bplist: rejected: (Unexpected character b at line 1)
+binary/date-marker-34.bplist: rejected: (Unexpected character b at line 1)
+binary/date.bplist: accepted
+binary/depth-512-and-integer.bplist: accepted
+binary/depth-513-and-integer.bplist: rejected: (Unexpected character b at line 1)
+binary/depth-513-empty.bplist: accepted
+binary/dictionary-contains-itself.bplist: rejected: (Unexpected character b at line 1)
+binary/duplicate-key-two-encodings.bplist: accepted
+binary/duplicate-key.bplist: accepted
+binary/expansion-bomb.bplist: accepted
+binary/extended-count-16.bplist: accepted
+binary/extended-count-huge.bplist: rejected: (Unexpected character b at line 1)
+binary/extended-count-not-integer.bplist: rejected: (Unexpected character b at line 1)
+binary/extended-count.bplist: accepted
+binary/fill.bplist: rejected: (Unexpected character b at line 1)
+binary/gap-between-objects.bplist: accepted
+binary/info.bplist: accepted
+binary/integer-128-negative.bplist: accepted
+binary/integer-128-wide.bplist: accepted
+binary/integer-32-bytes.bplist: rejected: (Unexpected character b at line 1)
+binary/integer-key.bplist: rejected: (Unexpected character b at line 1)
+binary/integers.bplist: accepted
+binary/latin1-ascii-string.bplist: accepted
+binary/lone-surrogate.bplist: accepted
+binary/no-objects.bplist: rejected: (Unexpected character b at line 1)
+binary/nul-in-string.bplist: accepted
+binary/null.bplist: accepted
+binary/object-past-area.bplist: rejected: (Unexpected character b at line 1)
+binary/offset-in-header.bplist: rejected: (Unexpected character b at line 1)
+binary/offset-in-table.bplist: rejected: (Unexpected character b at line 1)
+binary/offset-size-3.bplist: accepted
+binary/offset-size-9.bplist: rejected: (Unexpected character b at line 1)
+binary/ordered-set.bplist: rejected: (Unexpected character b at line 1)
+binary/real-2-bytes.bplist: rejected: (Unexpected character b at line 1)
+binary/reals.bplist: accepted
+binary/reference-out-of-range.bplist: rejected: (Unexpected character b at line 1)
+binary/reference-size-0.bplist: rejected: (Unexpected character b at line 1)
+binary/references-too-small.bplist: rejected: (Unexpected character b at line 1)
+binary/set.bplist: accepted
+binary/shared-objects.bplist: accepted
+binary/shared-offset.bplist: accepted
+binary/table-in-header.bplist: rejected: (Unexpected character b at line 1)
+binary/top-level-string.bplist: accepted
+binary/top-out-of-range.bplist: rejected: (Unexpected character b at line 1)
+binary/trailing-byte.bplist: rejected: (Unexpected character b at line 1)
+binary/types.bplist: accepted
+binary/uid.bplist: accepted
+binary/url-marker.bplist: rejected: (Unexpected character b at line 1)
+binary/utf8-string-marker.bplist: rejected: (Unexpected character b at line 1)
+binary/version-0x.bplist: accepted
+binary/version-10.bplist: rejected: (Unexpected character b at line 1)

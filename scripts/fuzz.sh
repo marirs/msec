@@ -12,13 +12,13 @@ seconds="${FUZZ_SECONDS:-60}"
 if [ "$#" -gt 0 ]; then
     targets=("$@")
 else
-    targets=(archive binary_xml protobuf_xml resource_table protobuf_resources elf certificate dex apk bundle)
+    targets=(archive binary_xml protobuf_xml resource_table protobuf_resources elf certificate dex apk bundle plist ipa)
 fi
 
 for target in "${targets[@]}"; do
     # Whole packages need room; single files stay small, which keeps mutation effective.
     case "$target" in
-        archive | apk | bundle) max_len=262144 ;;
+        archive | apk | bundle | ipa) max_len=262144 ;;
         *) max_len=65536 ;;
     esac
     mkdir -p "fuzz/corpus/$target"
