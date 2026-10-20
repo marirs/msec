@@ -89,7 +89,7 @@ fn bundle_record_reads_as_agp_reads_it() {
         );
         names_by_index.push(coordinates);
     }
-    assert_eq!(names_by_index.len(), 6);
+    assert_eq!(names_by_index.len(), 7);
     // The dependency graph, by coordinates.
     let mut edges: Vec<(String, Vec<String>)> = inventory
         .dependencies

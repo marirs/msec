@@ -3,3 +3,4 @@
 # CI workflows must be tracked despite the dotfile rule above.
 !.github/
 target/
+__pycache__/
