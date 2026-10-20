@@ -20,7 +20,9 @@
 //! - [`android::signing`]: v1/v2/v3/v3.1 signature verification and signer certificates.
 //! - [`elf`] and [`android::native`]: native libraries and their hardening.
 //! - [`android::dex`]: DEX files (compiled code) in the order Android loads them: strings,
-//!   types and class definitions, with the structural problems ART rejects.
+//!   types, class definitions and what each method's code refers to, with the structural
+//!   problems ART rejects; [`android::api`] and `analysis::code_checks` judge those references
+//!   (deprecated and removed framework APIs, Google Play's code checks).
 //! - [`android::Bundle`]: Android App Bundles, module by module: manifests in aapt2's protobuf
 //!   XML ([`android::xml::parse_proto`]), resource tables (`resources.pb`,
 //!   [`android::ResourceTable::parse_proto`]), DEX files and native libraries, with the base

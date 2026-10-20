@@ -14,5 +14,6 @@ from in their module documentation.
 
 Android framework data (src/android/generated/) is generated from Android Open Source Project
 files, licensed under the Apache License 2.0: the SDK's public-final.xml (attribute resource IDs)
-and frameworks/base core/res AndroidManifest.xml and strings.xml (permissions, protection levels
-and labels). Copyright (C) The Android Open Source Project.
+and api-versions.xml (API levels that deprecated or removed framework classes, methods and
+fields), and frameworks/base core/res AndroidManifest.xml and strings.xml (permissions,
+protection levels and labels). Copyright (C) The Android Open Source Project.

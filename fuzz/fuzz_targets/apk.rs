@@ -22,4 +22,5 @@ fuzz_target!(|data: &[u8]| {
     let _ = apk.native_findings();
     let _ = apk.store_findings(TODAY);
     let _ = apk.code_summary();
+    let _ = apk.code_findings();
 });

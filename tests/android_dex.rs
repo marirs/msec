@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use msec::android::Apk;
 use msec::android::dex::{
-    DexAnomalyKind, DexContainer, DexError, DexFile, MapProblem, PackageCount, ShadowedClass, parse,
+    DexAnomalyKind, DexContainer, DexError, DexFile, MapProblem, PackageCount, ShadowedClass,
+    Target, parse,
 };
 use msec::archive::{Limits, ZipArchive};
 
@@ -175,7 +176,7 @@ fn every_version_d8_writes_reads_as_dexdump_reads_it() {
         assert_eq!(container.files.len(), dumped.len(), "{name}");
         assert_eq!(container.files[0].version(), version);
         assert_matches_dexdump(&container.files[0], &dumped[0], name);
-        assert_eq!(container.files[0].classes.len(), 9, "{name}");
+        assert_eq!(container.files[0].classes.len(), 11, "{name}");
     }
 }
 
@@ -279,6 +280,11 @@ fn outcome_labels(container: &DexContainer) -> Vec<String> {
                 DexAnomalyKind::DuplicateClass { .. } => "duplicate-class".into(),
                 DexAnomalyKind::StringBudgetExhausted { .. } => "string-budget".into(),
                 DexAnomalyKind::InterfaceBudgetExhausted { .. } => "interface-budget".into(),
+                DexAnomalyKind::InvalidCode { .. } => "invalid-code".into(),
+                DexAnomalyKind::InvalidClassData { .. } => "invalid-class-data".into(),
+                DexAnomalyKind::BadProtoParameters { .. } => "bad-proto-parameters".into(),
+                DexAnomalyKind::CodeBudgetExhausted { .. } => "code-budget".into(),
+                DexAnomalyKind::ParameterBudgetExhausted { .. } => "parameter-budget".into(),
             });
         }
     }
@@ -287,15 +293,18 @@ fn outcome_labels(container: &DexContainer) -> Vec<String> {
 
 /// What msec must report for each hostile file. Together with art-verdicts.txt this checks
 /// both that msec finds the problem and that its claims about ART hold.
-const EXPECTED: [(&str, &[&str]); 22] = [
+const EXPECTED: [(&str, &[&str]); 25] = [
     ("bad-checksum", &["checksum"]),
     ("bad-class-index", &["bad-class-index"]),
+    ("bad-proto-parameters", &["bad-proto-parameters"]),
     ("bad-descriptor-index", &["bad-descriptor-index"]),
     ("bad-header-size", &["bad-header-size"]),
     ("bad-interfaces-offset", &["bad-interfaces"]),
     ("bad-signature", &["signature"]),
     ("bad-superclass-index", &["bad-superclass-index"]),
     ("byte-swapped", &["byte-swapped"]),
+    ("class-data-out-of-bounds", &["invalid-class-data"]),
+    ("code-past-end", &["invalid-code"]),
     ("compact-dex", &["compact-dex"]),
     (
         "container-table-in-later-section",
@@ -427,8 +436,8 @@ fn an_apk_reads_its_dex_files_in_load_order() {
     let summary = apk.code_summary();
     assert!(summary.complete);
     assert_eq!(summary.logical_files, 2);
-    // Nine classes in classes.dex; Analytics and a second Config in classes2.dex.
-    assert_eq!(summary.classes, 10);
+    // Eleven classes in classes.dex; Analytics and a second Config in classes2.dex.
+    assert_eq!(summary.classes, 12);
     assert_eq!(
         summary.shadowed,
         [ShadowedClass {
@@ -443,7 +452,7 @@ fn an_apk_reads_its_dex_files_in_load_order() {
         [
             PackageCount {
                 package: "dev.appchk.fixture.code".into(),
-                classes: 8,
+                classes: 10,
             },
             PackageCount {
                 package: String::new(),
@@ -473,4 +482,173 @@ fn fuzz_regressions() {
     let container = parse(old_version_section);
     assert_eq!(container.files.len(), 1);
     assert!(matches!(container.error, Some(DexError::BadContainer(_))));
+}
+
+/// The methods, fields and types each method's code refers to, as dexdump disassembles them:
+/// `(caller signature, sorted targets)` where a target is `method@N`, `field@N` or `type@N`.
+fn disassembly_references(name: &str) -> BTreeMap<String, Vec<String>> {
+    // String constants are printed as raw MUTF-8, which is not always UTF-8.
+    let bytes = std::fs::read(dex_dir().join(format!("{name}.disassembly.txt"))).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    let mut references: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut caller: Option<String> = None;
+    for line in text.lines() {
+        // `0005d8: ... |[0005d8] dev.appchk.Foo$Bar.<init>:(I)V` starts a method.
+        if let Some((_, header)) = line.split_once("|[")
+            && let Some((_, method)) = header.split_once("] ")
+        {
+            let (qualified, descriptor) = method.split_once(':').unwrap();
+            let (class, method_name) = qualified.rsplit_once('.').unwrap();
+            let signature = format!("L{};->{method_name}{descriptor}", class.replace('.', "/"));
+            references.entry(signature.clone()).or_default();
+            caller = Some(signature);
+            continue;
+        }
+        let Some(caller) = &caller else { continue };
+        if let Some((_, comment)) = line.rsplit_once("// ") {
+            for kind in ["method@", "field@", "type@"] {
+                if let Some(index) = comment.strip_prefix(kind) {
+                    let index = u32::from_str_radix(index.trim(), 16).unwrap();
+                    references
+                        .get_mut(caller)
+                        .unwrap()
+                        .push(format!("{kind}{index}"));
+                }
+            }
+        }
+    }
+    for targets in references.values_mut() {
+        targets.sort();
+        targets.dedup();
+    }
+    references
+}
+
+#[test]
+fn code_references_match_the_disassembly() {
+    for name in ["v035", "v039", "v041"] {
+        let container = parse(&read(&format!("{name}.dex")));
+        let file = &container.files[0];
+        assert!(file.complete(), "{name}: {:?}", file.anomalies);
+        let mut ours: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for reference in file.references() {
+            let caller = file.method_signature(reference.caller).unwrap();
+            let target = match reference.target {
+                Target::Method(index) => format!("method@{index}"),
+                Target::Field(index) => format!("field@{index}"),
+                Target::Type(index) => format!("type@{index}"),
+            };
+            ours.entry(caller).or_default().push(target);
+        }
+        for targets in ours.values_mut() {
+            targets.sort();
+        }
+        let theirs = disassembly_references(name);
+        // Every method with code is disassembled, references or not.
+        assert_eq!(file.methods_with_code(), theirs.len(), "{name}");
+        // Methods without references appear only in the disassembly.
+        let theirs: BTreeMap<String, Vec<String>> = theirs
+            .into_iter()
+            .filter(|(_, targets)| !targets.is_empty())
+            .collect();
+        assert_eq!(ours, theirs, "{name}");
+        // A framework call the fixture makes, by name.
+        assert!(
+            file.references()
+                .iter()
+                .any(|reference| matches!(reference.target,
+            Target::Method(index) if file.method_signature(index).as_deref()
+                == Some("Landroid/util/Log;->i(Ljava/lang/String;Ljava/lang/String;)I")))
+        );
+    }
+}
+
+/// What Google Play's release dashboard flags, found in the fixture's own calls (LegacyUi): the
+/// window colours Android 15 deprecated, a decode without BitmapFactory.Options, a deprecated
+/// method named through an app class, a deprecated superclass; and no inset handling while
+/// targeting API 36. Each finding names the calling methods.
+#[test]
+fn code_checks_find_what_google_play_flags() {
+    use msec::android::analysis::CodeRule;
+
+    let mut archive = ZipArchive::open(std::io::Cursor::new(CODE_APK), Limits::default()).unwrap();
+    let apk = Apk::read(&mut archive);
+    let findings: Vec<(CodeRule, Option<String>, Vec<String>)> = apk
+        .code_findings()
+        .into_iter()
+        .map(|finding| (finding.rule, finding.api, finding.callers))
+        .collect();
+    let legacy = |method: &str| format!("Ldev/appchk/fixture/code/LegacyUi;->{method}");
+    let colour = legacy("colour(Landroid/app/Activity;)V");
+    let status = "Landroid/view/Window;->setStatusBarColor(I)V";
+    let navigation = "Landroid/view/Window;->setNavigationBarColor(I)V";
+    let decode =
+        "Landroid/graphics/BitmapFactory;->decodeFile(Ljava/lang/String;)Landroid/graphics/Bitmap;";
+    let expected: Vec<(CodeRule, Option<String>, Vec<String>)> = vec![
+        (
+            CodeRule::DeprecatedApi,
+            Some(
+                "Landroid/app/Activity;->getFragmentManager()Landroid/app/FragmentManager;".into(),
+            ),
+            vec![legacy(
+                "fragments(Ldev/appchk/fixture/code/MainActivity;)Ljava/lang/Object;",
+            )],
+        ),
+        (
+            CodeRule::DeprecatedApi,
+            Some("Landroid/os/AsyncTask;".into()),
+            vec!["Ldev/appchk/fixture/code/LegacyUi$Loader;-><init>()V".into()],
+        ),
+        (
+            CodeRule::DeprecatedApi,
+            Some(navigation.into()),
+            vec![colour.clone()],
+        ),
+        (
+            CodeRule::DeprecatedApi,
+            Some(status.into()),
+            vec![colour.clone()],
+        ),
+        (
+            CodeRule::EdgeToEdgeDeprecatedApi,
+            Some(navigation.into()),
+            vec![colour.clone()],
+        ),
+        (
+            CodeRule::EdgeToEdgeDeprecatedApi,
+            Some(status.into()),
+            vec![colour],
+        ),
+        (CodeRule::EdgeToEdgeNotHandled, None, vec![]),
+        (
+            CodeRule::BitmapWithoutDownsampling,
+            Some(decode.into()),
+            vec![legacy(
+                "thumbnail(Ljava/lang/String;)Landroid/graphics/Bitmap;",
+            )],
+        ),
+    ];
+    assert_eq!(findings, expected);
+}
+
+/// The obfuscation estimate on d8 output (nothing renamed, no R8) and on R8's shrunk output of
+/// the same classes (renamed, R8 marker).
+#[test]
+fn obfuscation_is_estimated_from_class_names() {
+    use msec::android::analysis::dex_optimization;
+    use msec::android::dex::DexEntry;
+
+    let entry = |name: &str| DexEntry {
+        path: "classes.dex".into(),
+        size: read(name).len() as u64,
+        container: parse(&read(name)),
+    };
+    let d8 = dex_optimization(&[entry("v035.dex")], None);
+    assert_eq!((d8.classes, d8.obfuscated_classes, d8.r8), (11, 0, false));
+    let r8 = dex_optimization(&[entry("r8.dex")], None);
+    assert!(r8.r8);
+    assert_eq!(r8.classes, 2);
+    assert_eq!(r8.obfuscated_percent(), 50);
+    // Small apps are below Google Play's 10 MB floor: the requirement does not apply.
+    assert!(!r8.play_requirement_applies());
 }

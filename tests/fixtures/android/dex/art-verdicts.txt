@@ -1,22 +1,25 @@
-bad-checksum.dex: rejected: Failure to verify dex file 'hostile/bad-checksum.dex': Bad checksum (e99395ab, expected e9939554)
+bad-checksum.dex: rejected: Failure to verify dex file 'hostile/bad-checksum.dex': Bad checksum (5364893c, expected 536489c3)
 bad-class-index.dex: rejected: Failure to verify dex file 'hostile/bad-class-index.dex': Bad index for class_def.class: 9 >= 4
 bad-descriptor-index.dex: rejected: Failure to verify dex file 'hostile/bad-descriptor-index.dex': Bad index for type_id.descriptor: 9 >= 4
 bad-header-size.dex: rejected: Unable to open 'hostile/bad-header-size.dex' : Header size is 120 but 112 was expected
 bad-interfaces-offset.dex: rejected: Failure to verify dex file 'hostile/bad-interfaces-offset.dex': No data map entry found @ 7ffffff0; expected 1001
+bad-proto-parameters.dex: rejected: Failure to verify dex file 'hostile/bad-proto-parameters.dex': No data map entry found @ 14a0; expected 1001
 bad-signature.dex: accepted
 bad-superclass-index.dex: rejected: Failure to verify dex file 'hostile/bad-superclass-index.dex': Bad index for class_def.superclass: 9 >= 4
 byte-swapped.dex: rejected: Failure to verify dex file 'hostile/byte-swapped.dex': Unexpected endian_tag: 78563412
+class-data-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/class-data-out-of-bounds.dex': No data map entry found @ 14a8; expected 2000
+code-past-end.dex: rejected: Failure to verify dex file 'hostile/code-past-end.dex': List too large for insns size: 648+16777215*2 > 1498
 compact-dex.dex: rejected: Expected valid zip or dex file
 container-table-in-later-section.dex: rejected: Failure to verify dex file 'hostile/container-table-in-later-section.dex': Bad offset for section: got 90, expected 1c4
 duplicate-class.dex: rejected: Failure to verify dex file 'hostile/duplicate-class.dex': Redefinition of class with type idx: '0'
 invalid-mutf8.dex: rejected: Failure to verify dex file 'hostile/invalid-mutf8.dex': Illegal start byte f0 in string data
 map-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/map-out-of-bounds.dex': Offset(420) should be within file size(356) for map.
 map-out-of-order.dex: rejected: Failure to verify dex file 'hostile/map-out-of-order.dex': Out of order map item: 90 then 80 for type 2 last type was 6
-method-ids-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/method-ids-out-of-bounds.dex': Offset(3936) should be within file size(3936) for method-ids.
+method-ids-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/method-ids-out-of-bounds.dex': Offset(5272) should be within file size(5272) for method-ids.
 string-amplification.dex: rejected: Failure to verify dex file 'hostile/string-amplification.dex': Out-of-order string_ids: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-string-ids-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/string-ids-out-of-bounds.dex': Offset(3936) should be within file size(3936) for string-ids.
+string-ids-out-of-bounds.dex: rejected: Failure to verify dex file 'hostile/string-ids-out-of-bounds.dex': Offset(5272) should be within file size(5272) for string-ids.
 trailing-data.dex: accepted
-truncated.dex: rejected: Unable to open 'hostile/truncated.dex' : File size is 1968 but the header expects 3936
+truncated.dex: rejected: Unable to open 'hostile/truncated.dex' : File size is 2636 but the header expects 5272
 type-list-amplification.dex: rejected: Failure to verify dex file 'hostile/type-list-amplification.dex': Redefinition of class with type idx: '0'
 unsorted-strings.dex: rejected: Failure to verify dex file 'hostile/unsorted-strings.dex': Out-of-order string_ids: 'LB;' then 'LA;'
 version-036.dex: rejected: Unrecognized version number in hostile/version-036.dex: 0 3 6 

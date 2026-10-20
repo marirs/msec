@@ -1,0 +1,127 @@
+DEX file header:
+magic               : 'dex\n035\0'
+checksum            : 21adcc40
+signature           : 82d0...d78e
+file_size           : 1316
+header_size         : 112
+link_size           : 0
+link_off            : 0 (0x000000)
+string_ids_size     : 24
+string_ids_off      : 112 (0x000070)
+type_ids_size       : 10
+type_ids_off        : 208 (0x0000d0)
+proto_ids_size      : 3
+proto_ids_off       : 248 (0x0000f8)
+field_ids_size      : 1
+field_ids_off       : 284 (0x00011c)
+method_ids_size     : 10
+method_ids_off      : 292 (0x000124)
+class_defs_size     : 2
+class_defs_off      : 372 (0x000174)
+data_size           : 880
+data_off            : 436 (0x0001b4)
+
+
+Displaying 24 strings from string_ids:
+  string[000000] - '<init>'
+  string[000001] - 'I'
+  string[000002] - 'ILL'
+  string[000003] - 'La;'
+  string[000004] - 'Landroid/app/Activity;'
+  string[000005] - 'Landroid/os/Bundle;'
+  string[000006] - 'Landroid/util/Log;'
+  string[000007] - 'Ldev/appchk/fixture/code/MainActivity;'
+  string[000008] - 'Ljava/lang/Object;'
+  string[000009] - 'Ljava/lang/Runnable;'
+  string[000010] - 'Ljava/lang/String;'
+  string[000011] - 'SourceFile'
+  string[000012] - 'V'
+  string[000013] - 'VL'
+  string[000014] - 'a'
+  string[000015] - 'fixture'
+  string[000016] - 'greeter'
+  string[000017] - 'hello'
+  string[000018] - 'https://api.example.org/v1'
+  string[000019] - 'i'
+  string[000020] - 'lambda$new$0'
+  string[000021] - 'onCreate'
+  string[000022] - 'run'
+  string[000023] - '~~R8{"backend":"dex","compilation-mode":"release","has-checksums":false,"min-api":21,"r8-mode":"full","sha-1":"084a89126ae0596c599143df57a654646af28313","version":"9.2.4-dev"}'
+
+Class #0            -
+  Class descriptor  : 'La;'
+  Access flags      : 0x1011 (PUBLIC FINAL SYNTHETIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Ljava/lang/Runnable;'
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+  Virtual methods   -
+    #0              : (in La;)
+      name          : 'run'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 0
+      insns size    : 4 16-bit code units
+      catches       : (none)
+  source_file_idx   : 11
+
+Class #1            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Landroid/app/Activity;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'greeter'
+      type          : 'Ljava/lang/Runnable;'
+      access        : 0x0012 (PRIVATE FINAL)
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 1
+      insns size    : 11 16-bit code units
+      catches       : (none)
+    #1              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'a'
+      type          : '()V'
+      access        : 0x1009 (PUBLIC STATIC SYNTHETIC)
+      code          -
+      registers     : 0
+      ins           : 0
+      outs          : 0
+      insns size    : 4 16-bit code units
+      catches       : (none)
+    #2              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'lambda$new$0'
+      type          : '()V'
+      access        : 0x100a (PRIVATE STATIC SYNTHETIC)
+      code          -
+      registers     : 2
+      ins           : 0
+      outs          : 2
+      insns size    : 8 16-bit code units
+      catches       : (none)
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'onCreate'
+      type          : '(Landroid/os/Bundle;)V'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 2
+      insns size    : 16 16-bit code units
+      catches       : (none)
+  source_file_idx   : 11
+

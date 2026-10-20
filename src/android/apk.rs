@@ -3,9 +3,9 @@
 use std::io::{Read, Seek};
 
 use super::analysis::{
-    ManifestFinding, NativeFinding, NetworkFinding, NetworkSecurityConfig, SigningFinding,
-    StoreFinding, analyse_manifest, analyse_native, analyse_network_security, analyse_signing,
-    analyse_store,
+    CodeFinding, DexOptimization, ManifestFinding, NativeFinding, NetworkFinding,
+    NetworkSecurityConfig, SigningFinding, StoreFinding, analyse_code, analyse_manifest,
+    analyse_native, analyse_network_security, analyse_signing, analyse_store, dex_optimization,
 };
 use super::dex::{CodeSummary, DexEntry, read_dex_files, summarise};
 use super::inventory::Inventory;
@@ -164,6 +164,26 @@ impl Apk {
         let min_sdk = manifest.and_then(Manifest::min_sdk).unwrap_or(1);
         let target_sdk = manifest.and_then(Manifest::target_sdk).unwrap_or(min_sdk);
         analyse_signing(&self.signing, min_sdk, target_sdk, today)
+    }
+
+    /// Findings on what the DEX code calls: deprecated and removed framework APIs,
+    /// edge-to-edge, bitmap decoding, obfuscation. Empty when the manifest could not be decoded.
+    pub fn code_findings(&self) -> Vec<CodeFinding> {
+        self.manifest
+            .as_ref()
+            .map(|manifest| {
+                analyse_code(
+                    &self.dex_files,
+                    manifest,
+                    self.manifest_document.as_ref().ok(),
+                )
+            })
+            .unwrap_or_default()
+    }
+
+    /// How much of the code looks obfuscated, against Google Play's DEX requirement.
+    pub fn dex_optimization(&self) -> DexOptimization {
+        dex_optimization(&self.dex_files, self.manifest_document.as_ref().ok())
     }
 
     /// What the DEX files hold together: classes, packages, shadowed classes.

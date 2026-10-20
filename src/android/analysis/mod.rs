@@ -1,16 +1,22 @@
-//! Security analysis of an APK's manifest and network security configuration.
+//! Security analysis of an APK's manifest, network security configuration, signatures, native
+//! libraries, Google Play readiness and DEX code.
 //!
 //! Ported from MobSF v4.5.3 `StaticAnalyzer/views/android/manifest_analysis.py`,
 //! `network_security.py`, `cert_analysis.py` and `kb/android_manifest_desc.py`. Findings are typed; each carries
 //! MobSF's rule key and severity so MobSF-compatible output can be produced. Checks MobSF does
 //! not have are marked [`Origin::Msec`]. Deviations are listed in `docs/PORTING.md`.
 
+pub mod code_checks;
 pub mod manifest_checks;
 pub mod native_checks;
 pub mod network;
 pub mod signing_checks;
 pub mod store_checks;
 
+pub use code_checks::{
+    CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT, analyse_code,
+    dex_optimization,
+};
 pub use manifest_checks::{
     ExportReason, ManifestFinding, ManifestRule, PermissionLevel, Protection, analyse_manifest,
 };

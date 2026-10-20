@@ -1,0 +1,605 @@
+Class #0            -
+  Class descriptor  : 'LTopLevel;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in LTopLevel;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000638:                                        |[000638] TopLevel.<init>:()V
+000648: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00064e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 49
+
+Class #1            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/Plugin;'
+  Access flags      : 0x0601 (PUBLIC INTERFACE ABSTRACT)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/Plugin;)
+      name          : 'name'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0401 (PUBLIC ABSTRACT)
+      code          : (none)
+
+  source_file_idx   : 47
+
+Class #2            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/BothPlugin;'
+  Access flags      : 0x0401 (PUBLIC ABSTRACT)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Ljava/lang/Runnable;'
+    #1              : 'Ldev/appchk/fixture/code/Plugin;'
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/BothPlugin;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000668:                                        |[000668] dev.appchk.fixture.code.BothPlugin.<init>:()V
+000678: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00067e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/BothPlugin;)
+      name          : 'name'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 0
+      insns size    : 3 16-bit code units
+000650:                                        |[000650] dev.appchk.fixture.code.BothPlugin.name:()Ljava/lang/String;
+000660: 1a00 3e00                              |0000: const-string v0, "both" // string@003e
+000664: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+  source_file_idx   : 2
+
+Class #3            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/Config;'
+  Access flags      : 0x0011 (PUBLIC FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/Config;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10002 (PRIVATE CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000728:                                        |[000728] dev.appchk.fixture.code.Config.<init>:()V
+000738: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00073e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'accented'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+000680:                                        |[000680] dev.appchk.fixture.code.Config.accented:()Ljava/lang/String;
+000690: 1a00 3f00                              |0000: const-string v0, "cafÃ©" // string@003f
+000694: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #2              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'emoji'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+000698:                                        |[000698] dev.appchk.fixture.code.Config.emoji:()Ljava/lang/String;
+0006a8: 1a00 6300                              |0000: const-string v0, "í ½í¸€" // string@0063
+0006ac: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #3              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'endpoint'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+0006b0:                                        |[0006b0] dev.appchk.fixture.code.Config.endpoint:()Ljava/lang/String;
+0006c0: 1a00 5000                              |0000: const-string v0, "https://api.example.org/v1" // string@0050
+0006c4: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #4              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'greeting'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+0006c8:                                        |[0006c8] dev.appchk.fixture.code.Config.greeting:()Ljava/lang/String;
+0006d8: 1a00 4f00                              |0000: const-string v0, "hello" // string@004f
+0006dc: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #5              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'loneSurrogate'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+0006e0:                                        |[0006e0] dev.appchk.fixture.code.Config.loneSurrogate:()Ljava/lang/String;
+0006f0: 1a00 6200                              |0000: const-string v0, "í €" // string@0062
+0006f4: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #6              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'privateUse'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+0006f8:                                        |[0006f8] dev.appchk.fixture.code.Config.privateUse:()Ljava/lang/String;
+000708: 1a00 6400                              |0000: const-string v0, "î€€" // string@0064
+00070c: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+    #7              : (in Ldev/appchk/fixture/code/Config;)
+      name          : 'withNul'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 0
+      insns size    : 3 16-bit code units
+000710:                                        |[000710] dev.appchk.fixture.code.Config.withNul:()Ljava/lang/String;
+000720: 1a00 3b00                              |0000: const-string v0, "aÀ€b" // string@003b
+000724: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 3
+
+Class #4            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/LegacyUi$Loader;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Landroid/os/AsyncTask;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000774:                                        |[000774] dev.appchk.fixture.code.LegacyUi$Loader.<init>:()V
+000784: 7010 0500 0000                         |0000: invoke-direct {v0}, Landroid/os/AsyncTask;.<init>:()V // method@0005
+00078a: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : 'doInBackground'
+      type          : '([Ljava/lang/Object;)Ljava/lang/Object;'
+      access        : 0x1044 (PROTECTED BRIDGE SYNTHETIC)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 2
+      insns size    : 7 16-bit code units
+000740:                                        |[000740] dev.appchk.fixture.code.LegacyUi$Loader.doInBackground:([Ljava/lang/Object;)Ljava/lang/Object;
+000750: 1f01 2400                              |0000: check-cast v1, [Ljava/lang/Void; // type@0024
+000754: 6e20 1500 1000                         |0002: invoke-virtual {v0, v1}, Ldev/appchk/fixture/code/LegacyUi$Loader;.doInBackground:([Ljava/lang/Void;)Ljava/lang/Void; // method@0015
+00075a: 0c01                                   |0005: move-result-object v1
+00075c: 1101                                   |0006: return-object v1
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : 'doInBackground'
+      type          : '([Ljava/lang/Void;)Ljava/lang/Void;'
+      access        : 0x0084 (PROTECTED VARARGS)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 0
+      insns size    : 2 16-bit code units
+000760:                                        |[000760] dev.appchk.fixture.code.LegacyUi$Loader.doInBackground:([Ljava/lang/Void;)Ljava/lang/Void;
+000770: 1201                                   |0000: const/4 v1, #int 0 // #0
+000772: 1101                                   |0001: return-object v1
+      catches       : (none)
+
+  source_file_idx   : 36
+
+Class #5            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/LegacyUi;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10002 (PRIVATE CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+0007c4:                                        |[0007c4] dev.appchk.fixture.code.LegacyUi.<init>:()V
+0007d4: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+0007da: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'colour'
+      type          : '(Landroid/app/Activity;)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 2
+      insns size    : 17 16-bit code units
+0007dc:                                        |[0007dc] dev.appchk.fixture.code.LegacyUi.colour:(Landroid/app/Activity;)V
+0007ec: 6e10 0200 0200                         |0000: invoke-virtual {v2}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@0002
+0007f2: 0c00                                   |0003: move-result-object v0
+0007f4: 1501 00ff                              |0004: const/high16 v1, #int -16777216 // #ff00
+0007f8: 6e20 0800 1000                         |0006: invoke-virtual {v0, v1}, Landroid/view/Window;.setStatusBarColor:(I)V // method@0008
+0007fe: 6e10 0200 0200                         |0009: invoke-virtual {v2}, Landroid/app/Activity;.getWindow:()Landroid/view/Window; // method@0002
+000804: 0c02                                   |000c: move-result-object v2
+000806: 6e20 0700 1200                         |000d: invoke-virtual {v2, v1}, Landroid/view/Window;.setNavigationBarColor:(I)V // method@0007
+00080c: 0e00                                   |0010: return-void
+      catches       : (none)
+
+    #2              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'fragments'
+      type          : '(Ldev/appchk/fixture/code/MainActivity;)Ljava/lang/Object;'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 5 16-bit code units
+0007a8:                                        |[0007a8] dev.appchk.fixture.code.LegacyUi.fragments:(Ldev/appchk/fixture/code/MainActivity;)Ljava/lang/Object;
+0007b8: 6e10 1f00 0000                         |0000: invoke-virtual {v0}, Ldev/appchk/fixture/code/MainActivity;.getFragmentManager:()Landroid/app/FragmentManager; // method@001f
+0007be: 0c00                                   |0003: move-result-object v0
+0007c0: 1100                                   |0004: return-object v0
+      catches       : (none)
+
+    #3              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'thumbnail'
+      type          : '(Ljava/lang/String;)Landroid/graphics/Bitmap;'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 5 16-bit code units
+00078c:                                        |[00078c] dev.appchk.fixture.code.LegacyUi.thumbnail:(Ljava/lang/String;)Landroid/graphics/Bitmap;
+00079c: 7110 0400 0000                         |0000: invoke-static {v0}, Landroid/graphics/BitmapFactory;.decodeFile:(Ljava/lang/String;)Landroid/graphics/Bitmap; // method@0004
+0007a2: 0c00                                   |0003: move-result-object v0
+0007a4: 1100                                   |0004: return-object v0
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 36
+
+Class #6            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity$0;'
+  Access flags      : 0x1011 (PUBLIC FINAL SYNTHETIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Ljava/lang/Runnable;'
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity$0;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x11001 (PUBLIC SYNTHETIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000810:                                        |[000810] dev.appchk.fixture.code.MainActivity$0.<init>:()V
+000820: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+000826: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity$0;)
+      name          : 'run'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 0
+      insns size    : 4 16-bit code units
+000828:                                        |[000828] dev.appchk.fixture.code.MainActivity$0.run:()V
+000838: 7100 2000 0000                         |0000: invoke-static {}, Ldev/appchk/fixture/code/MainActivity;.lambda$new$0:()V // method@0020
+00083e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  source_file_idx   : 4
+
+Class #7            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity$Listener;'
+  Access flags      : 0x0000 ()
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Landroid/view/View$OnClickListener;'
+  Static fields     -
+  Instance fields   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity$Listener;)
+      name          : 'this$0'
+      type          : 'Ldev/appchk/fixture/code/MainActivity;'
+      access        : 0x1010 (FINAL SYNTHETIC)
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity$Listener;)
+      name          : '<init>'
+      type          : '(Ldev/appchk/fixture/code/MainActivity;)V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 1
+      insns size    : 6 16-bit code units
+000840:                                        |[000840] dev.appchk.fixture.code.MainActivity$Listener.<init>:(Ldev/appchk/fixture/code/MainActivity;)V
+000850: 5b01 0000                              |0000: iput-object v1, v0, Ldev/appchk/fixture/code/MainActivity$Listener;.this$0:Ldev/appchk/fixture/code/MainActivity; // field@0000
+000854: 7010 2a00 0000                         |0002: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00085a: 0e00                                   |0005: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity$Listener;)
+      name          : 'onClick'
+      type          : '(Landroid/view/View;)V'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 2
+      insns size    : 10 16-bit code units
+00085c:                                        |[00085c] dev.appchk.fixture.code.MainActivity$Listener.onClick:(Landroid/view/View;)V
+00086c: 1a02 4700                              |0000: const-string v2, "fixture" // string@0047
+000870: 7100 0e00 0000                         |0002: invoke-static {}, Ldev/appchk/fixture/code/Config;.endpoint:()Ljava/lang/String; // method@000e
+000876: 0c00                                   |0005: move-result-object v0
+000878: 7120 0600 0200                         |0006: invoke-static {v2, v0}, Landroid/util/Log;.i:(Ljava/lang/String;Ljava/lang/String;)I // method@0006
+00087e: 0e00                                   |0009: return-void
+      catches       : (none)
+
+  source_file_idx   : 46
+
+Class #8            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Landroid/app/Activity;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'greeter'
+      type          : 'Ljava/lang/Runnable;'
+      access        : 0x0012 (PRIVATE FINAL)
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 1
+      insns size    : 11 16-bit code units
+000880:                                        |[000880] dev.appchk.fixture.code.MainActivity.<init>:()V
+000890: 7010 0100 0100                         |0000: invoke-direct {v1}, Landroid/app/Activity;.<init>:()V // method@0001
+000896: 2200 1500                              |0003: new-instance v0, Ldev/appchk/fixture/code/MainActivity$0; // type@0015
+00089a: 7010 1a00 0000                         |0005: invoke-direct {v0}, Ldev/appchk/fixture/code/MainActivity$0;.<init>:()V // method@001a
+0008a0: 5b10 0100                              |0008: iput-object v0, v1, Ldev/appchk/fixture/code/MainActivity;.greeter:Ljava/lang/Runnable; // field@0001
+0008a4: 0e00                                   |000a: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'lambda$new$0'
+      type          : '()V'
+      access        : 0x1008 (STATIC SYNTHETIC)
+      code          -
+      registers     : 2
+      ins           : 0
+      outs          : 2
+      insns size    : 10 16-bit code units
+0008a8:                                        |[0008a8] dev.appchk.fixture.code.MainActivity.lambda$new$0:()V
+0008b8: 1a00 4700                              |0000: const-string v0, "fixture" // string@0047
+0008bc: 7100 0f00 0000                         |0002: invoke-static {}, Ldev/appchk/fixture/code/Config;.greeting:()Ljava/lang/String; // method@000f
+0008c2: 0c01                                   |0005: move-result-object v1
+0008c4: 7120 0600 1000                         |0006: invoke-static {v0, v1}, Landroid/util/Log;.i:(Ljava/lang/String;Ljava/lang/String;)I // method@0006
+0008ca: 0e00                                   |0009: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/MainActivity;)
+      name          : 'onCreate'
+      type          : '(Landroid/os/Bundle;)V'
+      access        : 0x0004 (PROTECTED)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 2
+      insns size    : 26 16-bit code units
+0008cc:                                        |[0008cc] dev.appchk.fixture.code.MainActivity.onCreate:(Landroid/os/Bundle;)V
+0008dc: 6f20 0300 2100                         |0000: invoke-super {v1, v2}, Landroid/app/Activity;.onCreate:(Landroid/os/Bundle;)V // method@0003
+0008e2: 2202 1600                              |0003: new-instance v2, Ldev/appchk/fixture/code/MainActivity$Listener; // type@0016
+0008e6: 7020 1c00 1200                         |0005: invoke-direct {v2, v1}, Ldev/appchk/fixture/code/MainActivity$Listener;.<init>:(Ldev/appchk/fixture/code/MainActivity;)V // method@001c
+0008ec: 1200                                   |0008: const/4 v0, #int 0 // #0
+0008ee: 6e20 1d00 0200                         |0009: invoke-virtual {v2, v0}, Ldev/appchk/fixture/code/MainActivity$Listener;.onClick:(Landroid/view/View;)V // method@001d
+0008f4: 5412 0100                              |000c: iget-object v2, v1, Ldev/appchk/fixture/code/MainActivity;.greeter:Ljava/lang/Runnable; // field@0001
+0008f8: 7210 2b00 0200                         |000e: invoke-interface {v2}, Ljava/lang/Runnable;.run:()V // method@002b
+0008fe: 2202 1900                              |0011: new-instance v2, Ldev/appchk/fixture/code/TopLevelUser; // type@0019
+000902: 7010 2300 0200                         |0013: invoke-direct {v2}, Ldev/appchk/fixture/code/TopLevelUser;.<init>:()V // method@0023
+000908: 6e10 2400 0200                         |0016: invoke-virtual {v2}, Ldev/appchk/fixture/code/TopLevelUser;.use:()V // method@0024
+00090e: 0e00                                   |0019: return-void
+      catches       : (none)
+
+  source_file_idx   : 46
+
+Class #9            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/TopLevelUser;'
+  Access flags      : 0x0000 ()
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/TopLevelUser;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000910:                                        |[000910] dev.appchk.fixture.code.TopLevelUser.<init>:()V
+000920: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+000926: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/TopLevelUser;)
+      name          : 'use'
+      type          : '()V'
+      access        : 0x0000 ()
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 1
+      insns size    : 6 16-bit code units
+000928:                                        |[000928] dev.appchk.fixture.code.TopLevelUser.use:()V
+000938: 1a00 3000                              |0000: const-string v0, "TopLevel" // string@0030
+00093c: 7110 2900 0000                         |0002: invoke-static {v0}, Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class; // method@0029
+000942: 0e00                                   |0005: return-void
+      catches       : 1
+        0x0000 - 0x0005
+          Ljava/lang/ClassNotFoundException; -> 0x0005
+
+  source_file_idx   : 50
+
+Class #10            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/TrustAllManager;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Ljavax/net/ssl/X509TrustManager;'
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/TrustAllManager;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000968:                                        |[000968] dev.appchk.fixture.code.TrustAllManager.<init>:()V
+000978: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00097e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/TrustAllManager;)
+      name          : 'checkClientTrusted'
+      type          : '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 3
+      outs          : 0
+      insns size    : 1 16-bit code units
+000980:                                        |[000980] dev.appchk.fixture.code.TrustAllManager.checkClientTrusted:([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V
+000990: 0e00                                   |0000: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/code/TrustAllManager;)
+      name          : 'checkServerTrusted'
+      type          : '([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 3
+      outs          : 0
+      insns size    : 1 16-bit code units
+000994:                                        |[000994] dev.appchk.fixture.code.TrustAllManager.checkServerTrusted:([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V
+0009a4: 0e00                                   |0000: return-void
+      catches       : (none)
+
+    #2              : (in Ldev/appchk/fixture/code/TrustAllManager;)
+      name          : 'getAcceptedIssuers'
+      type          : '()[Ljava/security/cert/X509Certificate;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 0
+      insns size    : 4 16-bit code units
+000950:                                        |[000950] dev.appchk.fixture.code.TrustAllManager.getAcceptedIssuers:()[Ljava/security/cert/X509Certificate;
+000960: 1200                                   |0000: const/4 v0, #int 0 // #0
+000962: 2300 2500                              |0001: new-array v0, v0, [Ljava/security/cert/X509Certificate; // type@0025
+000966: 1100                                   |0003: return-object v0
+      catches       : (none)
+
+  source_file_idx   : 51
+

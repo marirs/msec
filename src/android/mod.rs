@@ -1,6 +1,7 @@
 //! Android package analysis.
 
 pub mod analysis;
+pub mod api;
 mod apk;
 pub mod bundle;
 mod chunk;

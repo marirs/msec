@@ -16,6 +16,7 @@
 //! Which problems ART refuses is taken from its loader and verifier (`libdexfile`) and checked
 //! against AOSP's `dexdump` in the tests (`tests/fixtures/android/dex/art-verdicts.txt`).
 
+mod code;
 mod header;
 mod package;
 mod strings;
@@ -27,6 +28,8 @@ use std::mem::discriminant;
 use sha1::{Digest, Sha1};
 
 use crate::android::chunk::{u16_at, u32_at};
+use code::{CodeScan, MemberId, ProtoId};
+pub use code::{Reference, Target};
 use header::CONTAINER_VERSION;
 pub use header::{Header, Table};
 pub use package::{CodeSummary, DexEntry, PackageCount, ShadowedClass, read_dex_files, summarise};
@@ -232,6 +235,37 @@ pub enum DexAnomalyKind {
         /// First string ID not read.
         first_unread: u32,
     },
+    /// Method code that ART rejects: a code item outside the file, an instruction running past
+    /// the end of its code, or a reference to a method, field or type that does not exist.
+    InvalidCode {
+        /// Method ID of the method.
+        method: u32,
+    },
+    /// A `class_data_item` that cannot be read (outside the file, truncated, or declaring more
+    /// members than fit). ART rejects the file.
+    InvalidClassData {
+        /// Position in the class definition table.
+        class_def: u32,
+    },
+    /// A method prototype whose parameter list is outside the file or names a type outside the
+    /// type table. ART rejects the file.
+    BadProtoParameters {
+        /// Proto ID.
+        proto: u32,
+    },
+    /// Class data and code items share bytes, so reading them all would cost more than twice
+    /// the file's size: this class definition's code and the code after it were not read. Not
+    /// an Android limit.
+    CodeBudgetExhausted {
+        /// Position in the class definition table.
+        class_def: u32,
+    },
+    /// Parameter lists overlap so that reading them all would cost more than the file's size:
+    /// this proto's list was not read, nor any list first used after it. Not an Android limit.
+    ParameterBudgetExhausted {
+        /// Proto ID.
+        proto: u32,
+    },
     /// Interface lists overlap so that reading them all would cost more than the file's size:
     /// this class definition's list was not read, nor any list first used after it. Not an
     /// Android limit.
@@ -270,6 +304,8 @@ impl DexAnomalyKind {
                 | Self::TrailingData { .. }
                 | Self::StringBudgetExhausted { .. }
                 | Self::InterfaceBudgetExhausted { .. }
+                | Self::CodeBudgetExhausted { .. }
+                | Self::ParameterBudgetExhausted { .. }
         )
     }
 
@@ -277,7 +313,10 @@ impl DexAnomalyKind {
     pub fn limits_inventory(&self) -> bool {
         matches!(
             self,
-            Self::StringBudgetExhausted { .. } | Self::InterfaceBudgetExhausted { .. }
+            Self::StringBudgetExhausted { .. }
+                | Self::InterfaceBudgetExhausted { .. }
+                | Self::CodeBudgetExhausted { .. }
+                | Self::ParameterBudgetExhausted { .. }
         )
     }
 }
@@ -310,8 +349,12 @@ impl Anomalies {
 struct Budgets {
     /// String bytes still to decode.
     string_bytes: usize,
-    /// Interface list entries (two bytes each) still to read.
+    /// Type-list entries (two bytes each: interfaces, method parameters) still to read.
     interface_entries: usize,
+    /// Class data members, code units and references still to read
+    /// ([`DexAnomalyKind::CodeBudgetExhausted`]): a valid file needs fewer than its size in
+    /// each, so twice its size leaves room.
+    code_work: usize,
 }
 
 impl Budgets {
@@ -319,6 +362,7 @@ impl Budgets {
         Self {
             string_bytes: length.saturating_mul(2),
             interface_entries: length,
+            code_work: length.saturating_mul(2),
         }
     }
 }
@@ -369,9 +413,17 @@ pub struct DexFile {
     strings: StringTable,
     /// Descriptor string ID of each type ID ([`NO_INDEX`] when invalid).
     types: Vec<u32>,
-    /// Interface type IDs of all classes, back to back; lists shared by several classes (d8
-    /// shares identical lists) are stored once.
+    /// Type IDs of interface lists and method parameter lists, back to back; lists shared by
+    /// several classes or protos (d8 shares identical lists) are stored once.
     interface_types: Vec<u16>,
+    protos: Vec<ProtoId>,
+    fields: Vec<MemberId>,
+    methods: Vec<MemberId>,
+    /// What each method's code refers to, once per (caller, target), sorted by caller.
+    references: Vec<Reference>,
+    methods_with_code: usize,
+    /// Method IDs of the methods the file's classes define.
+    defined_methods: Vec<u32>,
 }
 
 /// A `.dex` file: one logical DEX file, or several in a version 041 container.
@@ -464,13 +516,18 @@ impl DexFile {
                 return Err(DexError::TableOutOfBounds(name));
             }
         }
-        for (name, table, item_size) in [
+        let mut readable = [true; 3];
+        for (slot, (name, table, item_size)) in [
             ("proto_ids", header.proto_ids, 12),
             ("field_ids", header.field_ids, 8),
             ("method_ids", header.method_ids, 8),
-        ] {
+        ]
+        .into_iter()
+        .enumerate()
+        {
             if !in_file(table, item_size) {
                 anomalies.record(DexAnomalyKind::TableOutOfBounds(name));
+                readable[slot] = false;
             }
         }
 
@@ -494,15 +551,95 @@ impl DexFile {
             strings,
             types,
             interface_types: Vec::new(),
+            protos: Vec::new(),
+            fields: Vec::new(),
+            methods: Vec::new(),
+            references: Vec::new(),
+            methods_with_code: 0,
+            defined_methods: Vec::new(),
         };
-        file.read_classes(
+        let mut lists = InterfaceLists {
+            by_offset: HashMap::new(),
+            budget: &mut budgets.interface_entries,
+        };
+        file.read_classes(bytes, (lower, upper), &mut lists, &mut anomalies);
+        file.read_ids(bytes, (lower, upper), readable, &mut lists, &mut anomalies);
+        file.scan_code(
             bytes,
             (lower, upper),
-            &mut budgets.interface_entries,
+            &mut budgets.code_work,
             &mut anomalies,
         );
         file.anomalies = anomalies.0;
         Ok(file)
+    }
+
+    /// Reads the proto, field and method ID tables (each when it lies in the file).
+    fn read_ids(
+        &mut self,
+        bytes: &[u8],
+        bounds: (usize, usize),
+        readable: [bool; 3],
+        lists: &mut InterfaceLists<'_>,
+        anomalies: &mut Anomalies,
+    ) {
+        let type_count = self.types.len() as u32;
+        let tables = [
+            (self.header.proto_ids, readable[0]),
+            (self.header.field_ids, readable[1]),
+            (self.header.method_ids, readable[2]),
+        ];
+        let entries = &mut self.interface_types;
+        let mut proto: u32 = 0;
+        let (protos, fields, methods) = code::read_ids(bytes, tables, |offset| {
+            let current = proto;
+            proto += 1;
+            match lists.read(bytes, offset, bounds, type_count, entries) {
+                Ok(range) => Some(range),
+                Err(InterfaceProblem::Invalid) => {
+                    anomalies.record(DexAnomalyKind::BadProtoParameters { proto: current });
+                    None
+                }
+                Err(InterfaceProblem::BudgetExhausted) => {
+                    anomalies.record(DexAnomalyKind::ParameterBudgetExhausted { proto: current });
+                    None
+                }
+            }
+        });
+        self.protos = protos;
+        self.fields = fields;
+        self.methods = methods;
+    }
+
+    /// Scans every class's methods for the methods, fields and types their code refers to.
+    fn scan_code(
+        &mut self,
+        bytes: &[u8],
+        bounds: (usize, usize),
+        budget: &mut usize,
+        anomalies: &mut Anomalies,
+    ) {
+        // Without the method table (outside the file, reported already) there is nothing to
+        // check code against.
+        if self.methods.is_empty() && self.header.method_ids.count > 0 {
+            return;
+        }
+        let counts = (
+            self.methods.len() as u32,
+            self.fields.len() as u32,
+            self.types.len() as u32,
+        );
+        let mut scan = CodeScan::new(bytes, bounds, counts, budget);
+        for (position, class) in self.classes.iter().enumerate() {
+            if class.class_data_offset != 0
+                && !scan.class(position as u32, class.class_data_offset, anomalies)
+            {
+                break;
+            }
+        }
+        self.methods_with_code = scan.methods_with_code;
+        self.defined_methods = scan.defined_methods;
+        self.references = scan.references.into_iter().collect();
     }
 
     /// Reads the class definitions, their interface lists, and checks for redefinitions.
@@ -510,16 +647,12 @@ impl DexFile {
         &mut self,
         bytes: &[u8],
         bounds: (usize, usize),
-        interface_budget: &mut usize,
+        lists: &mut InterfaceLists<'_>,
         anomalies: &mut Anomalies,
     ) {
         let table = self.header.class_defs;
         let type_count = self.types.len() as u32;
         let mut defined: HashSet<u32> = HashSet::new();
-        let mut lists = InterfaceLists {
-            by_offset: HashMap::new(),
-            budget: interface_budget,
-        };
         for position in 0..table.count {
             let at = table.offset as usize + 32 * position as usize;
             let field = |index: usize| {
@@ -637,6 +770,63 @@ impl DexFile {
     /// The source file name recorded for the class (`Main.java`).
     pub fn source_file(&self, class: &ClassDef) -> Option<&str> {
         self.strings.get(class.source_file?)
+    }
+
+    /// Number of method IDs: methods the file defines or refers to (the 64K limit counts these).
+    pub fn method_count(&self) -> usize {
+        self.methods.len()
+    }
+
+    /// Number of field IDs.
+    pub fn field_count(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// Methods whose code was read.
+    pub fn methods_with_code(&self) -> usize {
+        self.methods_with_code
+    }
+
+    /// Method IDs of the methods this file's classes define (with or without code).
+    pub fn defined_methods(&self) -> &[u32] {
+        &self.defined_methods
+    }
+
+    /// What each method's code refers to, once per (caller, target), sorted by caller.
+    pub fn references(&self) -> &[Reference] {
+        &self.references
+    }
+
+    /// Descriptor of the class declaring a method (`Landroid/view/Window;`).
+    pub fn method_class(&self, method: u32) -> Option<&str> {
+        let id = self.methods.get(method as usize)?;
+        self.type_descriptor(u32::from(id.class))
+    }
+
+    /// A method in DEX notation: `Landroid/view/Window;->setStatusBarColor(I)V`.
+    pub fn method_signature(&self, method: u32) -> Option<String> {
+        let id = self.methods.get(method as usize)?;
+        let class = self.type_descriptor(u32::from(id.class))?;
+        let name = self.strings.get(id.name)?;
+        let proto = self.protos.get(usize::from(id.kind))?;
+        let (start, length) = proto.parameters;
+        let mut signature = format!("{class}->{name}(");
+        for &parameter in &self.interface_types[start as usize..(start + length) as usize] {
+            signature.push_str(self.type_descriptor(u32::from(parameter))?);
+        }
+        signature.push(')');
+        signature.push_str(self.type_descriptor(proto.return_type)?);
+        Some(signature)
+    }
+
+    /// A field as `Lclass;->name` (the type is left out: a class's field names are unique),
+    /// with its type descriptor.
+    pub fn field_signature(&self, field: u32) -> Option<(String, &str)> {
+        let id = self.fields.get(field as usize)?;
+        let class = self.type_descriptor(u32::from(id.class))?;
+        let name = self.strings.get(id.name)?;
+        let kind = self.type_descriptor(u32::from(id.kind))?;
+        Some((format!("{class}->{name}"), kind))
     }
 
     /// Markers D8, R8 and L8 leave in the string table (`~~R8{"backend":"dex",...}`): which

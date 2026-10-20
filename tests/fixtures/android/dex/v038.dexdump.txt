@@ -1,104 +1,129 @@
 DEX file header:
 magic               : 'dex\n038\0'
-checksum            : ca7695ae
-signature           : 7784...0c94
-file_size           : 3936
+checksum            : 99e1872c
+signature           : 3a66...a289
+file_size           : 5272
 header_size         : 112
 link_size           : 0
 link_off            : 0 (0x000000)
-string_ids_size     : 76
+string_ids_size     : 101
 string_ids_off      : 112 (0x000070)
-type_ids_size       : 27
-type_ids_off        : 416 (0x0001a0)
-proto_ids_size      : 9
-proto_ids_off       : 524 (0x00020c)
+type_ids_size       : 38
+type_ids_off        : 516 (0x000204)
+proto_ids_size      : 17
+proto_ids_off       : 668 (0x00029c)
 field_ids_size      : 2
-field_ids_off       : 632 (0x000278)
-method_ids_size     : 31
-method_ids_off      : 648 (0x000288)
-class_defs_size     : 9
-class_defs_off      : 896 (0x000380)
-data_size           : 2752
-data_off            : 1184 (0x0004a0)
+field_ids_off       : 872 (0x000368)
+method_ids_size     : 44
+method_ids_off      : 888 (0x000378)
+class_defs_size     : 11
+class_defs_off      : 1240 (0x0004d8)
+data_size           : 3680
+data_off            : 1592 (0x000638)
 
 
-Displaying 76 strings from string_ids:
+Displaying 101 strings from string_ids:
   string[000000] - '<init>'
-  string[000001] - 'BothPlugin.java'
-  string[000002] - 'Config.java'
-  string[000003] - 'D8$$SyntheticClass'
-  string[000004] - 'I'
-  string[000005] - 'ILL'
-  string[000006] - 'L'
-  string[000007] - 'LL'
-  string[000008] - 'LTopLevel;'
-  string[000009] - 'Landroid/app/Activity;'
-  string[000010] - 'Landroid/os/Bundle;'
-  string[000011] - 'Landroid/util/Log;'
-  string[000012] - 'Landroid/view/View$OnClickListener;'
-  string[000013] - 'Landroid/view/View;'
-  string[000014] - 'Ldalvik/annotation/EnclosingClass;'
-  string[000015] - 'Ldalvik/annotation/InnerClass;'
-  string[000016] - 'Ldalvik/annotation/MemberClasses;'
-  string[000017] - 'Ldalvik/annotation/MethodParameters;'
-  string[000018] - 'Ldev/appchk/fixture/code/BothPlugin;'
-  string[000019] - 'Ldev/appchk/fixture/code/Config;'
-  string[000020] - 'Ldev/appchk/fixture/code/MainActivity$0;'
-  string[000021] - 'Ldev/appchk/fixture/code/MainActivity$Listener;'
-  string[000022] - 'Ldev/appchk/fixture/code/MainActivity;'
-  string[000023] - 'Ldev/appchk/fixture/code/Plugin;'
-  string[000024] - 'Ldev/appchk/fixture/code/TopLevelUser;'
-  string[000025] - 'Ldev/appchk/fixture/code/TrustAllManager;'
-  string[000026] - 'Listener'
-  string[000027] - 'Ljava/lang/Class;'
-  string[000028] - 'Ljava/lang/ClassNotFoundException;'
-  string[000029] - 'Ljava/lang/Object;'
-  string[000030] - 'Ljava/lang/Runnable;'
-  string[000031] - 'Ljava/lang/String;'
-  string[000032] - 'Ljavax/net/ssl/X509TrustManager;'
-  string[000033] - 'MainActivity.java'
-  string[000034] - 'Plugin.java'
-  string[000035] - 'TopLevel'
-  string[000036] - 'TopLevel.java'
-  string[000037] - 'TopLevelUser.java'
-  string[000038] - 'TrustAllManager.java'
-  string[000039] - 'V'
-  string[000040] - 'VL'
-  string[000041] - 'VLL'
-  string[000042] - '[Ljava/security/cert/X509Certificate;'
-  string[000043] - 'skipped (not printable)'
-  string[000044] - 'accented'
-  string[000045] - 'accessFlags'
-  string[000046] - 'both'
-  string[000047] - 'skipped (not printable)'
-  string[000048] - 'checkClientTrusted'
-  string[000049] - 'checkServerTrusted'
-  string[000050] - 'emoji'
-  string[000051] - 'endpoint'
-  string[000052] - 'fixture'
-  string[000053] - 'forName'
-  string[000054] - 'getAcceptedIssuers'
-  string[000055] - 'greeter'
-  string[000056] - 'greeting'
-  string[000057] - 'hello'
-  string[000058] - 'https://api.example.org/v1'
-  string[000059] - 'i'
-  string[000060] - 'lambda$new$0'
-  string[000061] - 'loneSurrogate'
-  string[000062] - 'name'
-  string[000063] - 'names'
-  string[000064] - 'onClick'
-  string[000065] - 'onCreate'
-  string[000066] - 'privateUse'
-  string[000067] - 'run'
-  string[000068] - 'this$0'
-  string[000069] - 'use'
-  string[000070] - 'value'
-  string[000071] - 'withNul'
-  string[000072] - '~~D8{"backend":"dex","compilation-mode":"release","has-checksums":false,"min-api":26,"sha-1":"084a89126ae0596c599143df57a654646af28313","version":"9.2.4-dev"}'
-  string[000073] - 'skipped (not printable)'
-  string[000074] - 'skipped (not printable)'
-  string[000075] - 'skipped (not printable)'
+  string[000001] - '>;'
+  string[000002] - 'BothPlugin.java'
+  string[000003] - 'Config.java'
+  string[000004] - 'D8$$SyntheticClass'
+  string[000005] - 'I'
+  string[000006] - 'ILL'
+  string[000007] - 'L'
+  string[000008] - 'LL'
+  string[000009] - 'LTopLevel;'
+  string[000010] - 'Landroid/app/Activity;'
+  string[000011] - 'Landroid/app/FragmentManager;'
+  string[000012] - 'Landroid/graphics/Bitmap;'
+  string[000013] - 'Landroid/graphics/BitmapFactory;'
+  string[000014] - 'Landroid/os/AsyncTask;'
+  string[000015] - 'Landroid/os/AsyncTask<'
+  string[000016] - 'Landroid/os/Bundle;'
+  string[000017] - 'Landroid/util/Log;'
+  string[000018] - 'Landroid/view/View$OnClickListener;'
+  string[000019] - 'Landroid/view/View;'
+  string[000020] - 'Landroid/view/Window;'
+  string[000021] - 'Ldalvik/annotation/EnclosingClass;'
+  string[000022] - 'Ldalvik/annotation/InnerClass;'
+  string[000023] - 'Ldalvik/annotation/MemberClasses;'
+  string[000024] - 'Ldalvik/annotation/MethodParameters;'
+  string[000025] - 'Ldalvik/annotation/Signature;'
+  string[000026] - 'Ldev/appchk/fixture/code/BothPlugin;'
+  string[000027] - 'Ldev/appchk/fixture/code/Config;'
+  string[000028] - 'Ldev/appchk/fixture/code/LegacyUi$Loader;'
+  string[000029] - 'Ldev/appchk/fixture/code/LegacyUi;'
+  string[000030] - 'Ldev/appchk/fixture/code/MainActivity$0;'
+  string[000031] - 'Ldev/appchk/fixture/code/MainActivity$Listener;'
+  string[000032] - 'Ldev/appchk/fixture/code/MainActivity;'
+  string[000033] - 'Ldev/appchk/fixture/code/Plugin;'
+  string[000034] - 'Ldev/appchk/fixture/code/TopLevelUser;'
+  string[000035] - 'Ldev/appchk/fixture/code/TrustAllManager;'
+  string[000036] - 'LegacyUi.java'
+  string[000037] - 'Listener'
+  string[000038] - 'Ljava/lang/Class;'
+  string[000039] - 'Ljava/lang/ClassNotFoundException;'
+  string[000040] - 'Ljava/lang/Object;'
+  string[000041] - 'Ljava/lang/Runnable;'
+  string[000042] - 'Ljava/lang/String;'
+  string[000043] - 'Ljava/lang/Void;'
+  string[000044] - 'Ljavax/net/ssl/X509TrustManager;'
+  string[000045] - 'Loader'
+  string[000046] - 'MainActivity.java'
+  string[000047] - 'Plugin.java'
+  string[000048] - 'TopLevel'
+  string[000049] - 'TopLevel.java'
+  string[000050] - 'TopLevelUser.java'
+  string[000051] - 'TrustAllManager.java'
+  string[000052] - 'V'
+  string[000053] - 'VI'
+  string[000054] - 'VL'
+  string[000055] - 'VLL'
+  string[000056] - '[Ljava/lang/Object;'
+  string[000057] - '[Ljava/lang/Void;'
+  string[000058] - '[Ljava/security/cert/X509Certificate;'
+  string[000059] - 'skipped (not printable)'
+  string[000060] - 'accented'
+  string[000061] - 'accessFlags'
+  string[000062] - 'both'
+  string[000063] - 'skipped (not printable)'
+  string[000064] - 'checkClientTrusted'
+  string[000065] - 'checkServerTrusted'
+  string[000066] - 'colour'
+  string[000067] - 'decodeFile'
+  string[000068] - 'doInBackground'
+  string[000069] - 'emoji'
+  string[000070] - 'endpoint'
+  string[000071] - 'fixture'
+  string[000072] - 'forName'
+  string[000073] - 'fragments'
+  string[000074] - 'getAcceptedIssuers'
+  string[000075] - 'getFragmentManager'
+  string[000076] - 'getWindow'
+  string[000077] - 'greeter'
+  string[000078] - 'greeting'
+  string[000079] - 'hello'
+  string[000080] - 'https://api.example.org/v1'
+  string[000081] - 'i'
+  string[000082] - 'lambda$new$0'
+  string[000083] - 'loneSurrogate'
+  string[000084] - 'name'
+  string[000085] - 'names'
+  string[000086] - 'onClick'
+  string[000087] - 'onCreate'
+  string[000088] - 'privateUse'
+  string[000089] - 'run'
+  string[000090] - 'setNavigationBarColor'
+  string[000091] - 'setStatusBarColor'
+  string[000092] - 'this$0'
+  string[000093] - 'thumbnail'
+  string[000094] - 'use'
+  string[000095] - 'value'
+  string[000096] - 'withNul'
+  string[000097] - '~~D8{"backend":"dex","compilation-mode":"release","has-checksums":false,"min-api":26,"sha-1":"084a89126ae0596c599143df57a654646af28313","version":"9.2.4-dev"}'
+  string[000098] - 'skipped (not printable)'
+  string[000099] - 'skipped (not printable)'
+  string[000100] - 'skipped (not printable)'
 
 Class #0            -
   Class descriptor  : 'LTopLevel;'
@@ -119,7 +144,7 @@ Class #0            -
       insns size    : 4 16-bit code units
       catches       : (none)
   Virtual methods   -
-  source_file_idx   : 36
+  source_file_idx   : 49
 
 Class #1            -
   Class descriptor  : 'Ldev/appchk/fixture/code/Plugin;'
@@ -135,7 +160,7 @@ Class #1            -
       type          : '()Ljava/lang/String;'
       access        : 0x0401 (PUBLIC ABSTRACT)
       code          : (none)
-  source_file_idx   : 34
+  source_file_idx   : 47
 
 Class #2            -
   Class descriptor  : 'Ldev/appchk/fixture/code/BothPlugin;'
@@ -168,7 +193,7 @@ Class #2            -
       outs          : 0
       insns size    : 3 16-bit code units
       catches       : (none)
-  source_file_idx   : 1
+  source_file_idx   : 2
 
 Class #3            -
   Class descriptor  : 'Ldev/appchk/fixture/code/Config;'
@@ -259,9 +284,101 @@ Class #3            -
       insns size    : 3 16-bit code units
       catches       : (none)
   Virtual methods   -
-  source_file_idx   : 2
+  source_file_idx   : 3
 
 Class #4            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/LegacyUi$Loader;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Landroid/os/AsyncTask;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+      catches       : (none)
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : 'doInBackground'
+      type          : '([Ljava/lang/Object;)Ljava/lang/Object;'
+      access        : 0x1044 (PROTECTED BRIDGE SYNTHETIC)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 2
+      insns size    : 7 16-bit code units
+      catches       : (none)
+    #1              : (in Ldev/appchk/fixture/code/LegacyUi$Loader;)
+      name          : 'doInBackground'
+      type          : '([Ljava/lang/Void;)Ljava/lang/Void;'
+      access        : 0x0084 (PROTECTED VARARGS)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 0
+      insns size    : 2 16-bit code units
+      catches       : (none)
+  source_file_idx   : 36
+
+Class #5            -
+  Class descriptor  : 'Ldev/appchk/fixture/code/LegacyUi;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10002 (PRIVATE CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+      catches       : (none)
+    #1              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'colour'
+      type          : '(Landroid/app/Activity;)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 2
+      insns size    : 17 16-bit code units
+      catches       : (none)
+    #2              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'fragments'
+      type          : '(Ldev/appchk/fixture/code/MainActivity;)Ljava/lang/Object;'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 5 16-bit code units
+      catches       : (none)
+    #3              : (in Ldev/appchk/fixture/code/LegacyUi;)
+      name          : 'thumbnail'
+      type          : '(Ljava/lang/String;)Landroid/graphics/Bitmap;'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 5 16-bit code units
+      catches       : (none)
+  Virtual methods   -
+  source_file_idx   : 36
+
+Class #6            -
   Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity$0;'
   Access flags      : 0x1011 (PUBLIC FINAL SYNTHETIC)
   Superclass        : 'Ljava/lang/Object;'
@@ -291,9 +408,9 @@ Class #4            -
       outs          : 0
       insns size    : 4 16-bit code units
       catches       : (none)
-  source_file_idx   : 3
+  source_file_idx   : 4
 
-Class #5            -
+Class #7            -
   Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity$Listener;'
   Access flags      : 0x0000 ()
   Superclass        : 'Ljava/lang/Object;'
@@ -327,9 +444,9 @@ Class #5            -
       outs          : 2
       insns size    : 10 16-bit code units
       catches       : (none)
-  source_file_idx   : 33
+  source_file_idx   : 46
 
-Class #6            -
+Class #8            -
   Class descriptor  : 'Ldev/appchk/fixture/code/MainActivity;'
   Access flags      : 0x0001 (PUBLIC)
   Superclass        : 'Landroid/app/Activity;'
@@ -372,9 +489,9 @@ Class #6            -
       outs          : 2
       insns size    : 26 16-bit code units
       catches       : (none)
-  source_file_idx   : 33
+  source_file_idx   : 46
 
-Class #7            -
+Class #9            -
   Class descriptor  : 'Ldev/appchk/fixture/code/TopLevelUser;'
   Access flags      : 0x0000 ()
   Superclass        : 'Ljava/lang/Object;'
@@ -405,9 +522,9 @@ Class #7            -
       catches       : 1
         0x0000 - 0x0005
           Ljava/lang/ClassNotFoundException; -> 0x0005
-  source_file_idx   : 37
+  source_file_idx   : 50
 
-Class #8            -
+Class #10            -
   Class descriptor  : 'Ldev/appchk/fixture/code/TrustAllManager;'
   Access flags      : 0x0001 (PUBLIC)
   Superclass        : 'Ljava/lang/Object;'
@@ -457,5 +574,5 @@ Class #8            -
       outs          : 0
       insns size    : 4 16-bit code units
       catches       : (none)
-  source_file_idx   : 38
+  source_file_idx   : 51
 

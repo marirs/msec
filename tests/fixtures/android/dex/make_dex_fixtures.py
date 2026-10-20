@@ -248,6 +248,30 @@ def edited(d8_dex, problem):
         struct.pack_into("<I", dex, 60, len(dex))
     elif problem == "method-ids-out-of-bounds":
         struct.pack_into("<I", dex, 92, len(dex))
+    elif problem == "class-data-out-of-bounds":
+        # The first class definition with class data: point it past the end.
+        class_defs_size, class_defs_off = struct.unpack_from("<II", dex, 96)
+        for index in range(class_defs_size):
+            at = class_defs_off + 32 * index + 24
+            if struct.unpack_from("<I", dex, at)[0]:
+                struct.pack_into("<I", dex, at, len(dex) + 16)
+                break
+    elif problem == "code-past-end":
+        # The first code item (map type 0x2001): an instruction count running past the file.
+        map_off = struct.unpack_from("<I", dex, 52)[0]
+        for index in range(struct.unpack_from("<I", dex, map_off)[0]):
+            kind, _, _, offset = struct.unpack_from("<HHII", dex, map_off + 4 + 12 * index)
+            if kind == 0x2001:
+                struct.pack_into("<I", dex, offset + 12, 0x00FFFFFF)
+                break
+    elif problem == "bad-proto-parameters":
+        # The first prototype with parameters: point its list past the end.
+        protos_size, protos_off = struct.unpack_from("<II", dex, 72)
+        for index in range(protos_size):
+            at = protos_off + 12 * index + 8
+            if struct.unpack_from("<I", dex, at)[0]:
+                struct.pack_into("<I", dex, at, len(dex) + 8)
+                break
     if problem not in ("bad-checksum", "bad-signature", "compact-dex", "truncated", "trailing-data"):
         # Re-sign, so the edit is the file's only problem.
         dex[12:32] = hashlib.sha1(dex[32:]).digest()
@@ -270,7 +294,8 @@ def main():
     files["type-list-amplification"] = type_list_amplification()
     for problem in ("bad-checksum", "bad-signature", "version-036", "compact-dex", "byte-swapped",
                     "bad-header-size", "truncated", "trailing-data", "string-ids-out-of-bounds",
-                    "method-ids-out-of-bounds"):
+                    "method-ids-out-of-bounds", "class-data-out-of-bounds", "code-past-end",
+                    "bad-proto-parameters"):
         files[problem] = edited(d8_dex, problem)
     for name, data in files.items():
         (out / "hostile" / f"{name}.dex").write_bytes(data)

@@ -1,13 +1,14 @@
 #!/bin/sh
 # Rebuilds the DEX fixtures:
 # - dex/v0NN.dex: d8's output for code/java/primary in each DEX version d8 writes (041 is the
-#   experimental container format, behind a D8 system property);
+#   experimental container format, behind a D8 system property); dex/r8.dex: R8's shrunk and
+#   obfuscated output for the same classes;
 # - code.apk: the code/ app with classes.dex (code/java/primary) and classes2.dex
 #   (code/java/secondary);
 # - dex/container.dex and dex/hostile/*.dex: synthetic files from make_dex_fixtures.py;
-# - dex/**/*.dexdump.txt and dex/art-verdicts.txt: what AOSP's dexdump (ART's DEX loader and
-#   verifier) reads in each file, and whether it accepts it. The tests compare msec against
-#   these.
+# - dex/**/*.dexdump.txt, dex/*.disassembly.txt and dex/art-verdicts.txt: what AOSP's dexdump
+#   (ART's DEX loader and verifier) reads in each file, its disassembly, and whether it accepts
+#   each hostile file. The tests compare msec against these.
 # Needs ANDROID_HOME (or the default macOS SDK location), build-tools 37.0.0, platform
 # android-37.0, and a JDK 17 or later (javac and java on PATH, or JAVA_HOME).
 set -eu
@@ -42,6 +43,12 @@ done
 dex 36 "$work/primary.list" "$work/api36" -Dcom.android.tools.r8.dexContainerExperiment=true
 cp "$work/api36/classes.dex" dex/v041.dex
 dex 21 "$work/secondary.list" "$work/secondary-dex"
+# The same code shrunk and obfuscated by R8 (keeping the activity), as release builds are.
+printf '%s\n' '-keep class dev.appchk.fixture.code.MainActivity { *; }' '-dontwarn **' > "$work/keep.pro"
+mkdir -p "$work/r8"
+java -cp "$tools/lib/d8.jar" com.android.tools.r8.R8 --release --lib "$platform" --min-api 21 \
+  --pg-conf "$work/keep.pro" --output "$work/r8" $(cat "$work/primary.list")
+cp "$work/r8/classes.dex" dex/r8.dex
 
 "$tools/aapt2" compile --dir code/res -o "$work/res.zip"
 "$tools/aapt2" link -I "$platform" --manifest code/AndroidManifest.xml -o code.apk "$work/res.zip"
@@ -64,8 +71,13 @@ python3 -I dex/make_dex_fixtures.py dex/v035.dex dex
 messages() { sed -n 's/^.* dexdump : [a-z_]*\.cc:[0-9]* //p'; }
 (
   cd dex
-  for file in v*.dex container.dex; do
+  for file in v*.dex container.dex r8.dex; do
     "$tools/dexdump" -n -f -s "$file" > "${file%.dex}.dexdump.txt" 2> /dev/null
+  done
+  # Disassembly (-d): every method's instructions with the method, field and type each
+  # references, which the tests compare msec's code scan against.
+  for file in v035.dex v039.dex v041.dex; do
+    "$tools/dexdump" -n -d "$file" > "${file%.dex}.disassembly.txt" 2> /dev/null
   done
   for file in hostile/*.dex; do
     if "$tools/dexdump" -n "$file" > /dev/null 2> "$work/log"; then
