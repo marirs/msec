@@ -1,0 +1,5 @@
+META-INF/androidx.core_core.version	androidx.core:core@1.15.0
+META-INF/androidx.arch.core_core-runtime.version	androidx.arch.core:core-runtime@-
+META-INF/kotlinx_coroutines_core.version	org.jetbrains.kotlinx:kotlinx-coroutines-core@1.10.1
+META-INF/maven/com.squareup.okio/okio/pom.properties	com.squareup.okio:okio@3.9.0
+play-services-basement.properties	com.google.android.gms:play-services-basement@18.4.0

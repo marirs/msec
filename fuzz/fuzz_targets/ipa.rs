@@ -19,4 +19,5 @@ fuzz_target!(|data: &[u8]| {
     }
     let _ = msec::secrets::ios::scan_ipa(&mut archive, &ipa);
     let _ = msec::trackers::scan_ipa(&mut archive, &ipa);
+    let _ = msec::components::of_ipa(&ipa);
 });

@@ -44,6 +44,8 @@
 //! - [`trackers`]: third-party trackers from the εxodus database, by code signature (Android)
 //!   and network signature (iOS); [`urls`] finds URLs as MobSF does.
 //! - [`package_strings`]: every string a package holds, walked once for the detectors above.
+//! - [`components`]: the third-party components a package carries, with their evidence and
+//!   version confidence: the inventory an SBOM is built from.
 //!
 //! See the repository README for the porting roadmap.
 //!
@@ -52,6 +54,7 @@
 pub mod android;
 pub mod archive;
 pub mod cms;
+pub mod components;
 pub mod elf;
 pub mod hashes;
 pub mod ios;

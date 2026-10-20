@@ -19,4 +19,5 @@ fuzz_target!(|data: &[u8]| {
     }
     let _ = msec::secrets::android::scan_bundle(&mut archive, &bundle);
     let _ = msec::trackers::scan_bundle(&bundle);
+    let _ = msec::components::of_bundle(&mut archive, &bundle);
 });

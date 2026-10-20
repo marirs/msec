@@ -11,7 +11,7 @@ pub mod inventory;
 pub mod manifest;
 pub mod native;
 pub mod permissions;
-mod proto;
+pub(crate) mod proto;
 mod proto_resources;
 mod proto_xml;
 pub mod resources;

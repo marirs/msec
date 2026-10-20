@@ -1,6 +1,6 @@
 //! A whole APK read from arbitrary bytes: archive, manifest, resources, network security
 //! configuration, signatures (APK Signing Block, v1 PKCS#7), native libraries, DEX files, then
-//! every analysis, the secret and tracker scans included.
+//! every analysis, the secret and tracker scans and the component inventory included.
 #![no_main]
 
 use std::io::Cursor;
@@ -25,4 +25,5 @@ fuzz_target!(|data: &[u8]| {
     let _ = apk.code_findings();
     let _ = msec::secrets::android::scan_apk(&mut archive, &apk);
     let _ = msec::trackers::scan_apk(&apk);
+    let _ = msec::components::of_apk(&mut archive, &apk);
 });
