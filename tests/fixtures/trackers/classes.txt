@@ -1,0 +1,7 @@
+Lcom/adjust/sdk/Adjust;
+Lcom/adjusted/Thing;
+Lcom/appsflyer/AppsFlyerLib;
+Lcom/facebook/appevents/AppEventsLogger;
+Lcom/google/android/gms/ads/AdView;
+Lcom/google/firebase/analytics/FirebaseAnalytics;
+Ldev/appchk/fixture/trackers/Main;

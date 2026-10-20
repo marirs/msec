@@ -1,0 +1,3 @@
+apk-code	Adjust|AppsFlyer|Facebook Analytics|Google AdMob|Google Firebase Analytics
+ipa-hosts	api.example.com|api.mixpanel.com|app.adjust.com|developer.apple.com|graph.facebook.com
+ipa-network	Adjust|Facebook Ads|Facebook Analytics|Facebook Audience|Facebook Login|Facebook Notifications|Facebook Places|Facebook Share|MixPanel

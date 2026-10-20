@@ -1,4 +1,4 @@
-//! Strings out of binaries and text out of files, for the secret detectors.
+//! Strings out of binaries and text out of files.
 
 /// Shortest binary string worth checking: every known format is longer, and MobSF's entropy
 /// heuristic needs 21 characters.

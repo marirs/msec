@@ -1,13 +1,13 @@
-//! Secrets in APKs and app bundles: resource strings (MobSF `android/strings.py`), DEX strings
-//! (MobSF reads string literals from jadx's decompiled sources; msec reads the DEX string table
-//! directly, see PORTING.md deviation 35), native libraries' strings, and text files MobSF does
-//! not read (assets, `res/raw`, a bundle module's `root/`).
+//! The strings of APKs and app bundles: resource strings (as MobSF's `android/strings.py` reads
+//! them), DEX strings (MobSF reads string literals from jadx's decompiled sources; msec reads the
+//! DEX string table directly, see PORTING.md deviation 35), native libraries' strings, and text
+//! files MobSF does not read (assets, `res/raw`, a bundle module's `root/`).
 
 use std::collections::HashSet;
 use std::io::{Read, Seek};
 
-use super::strings::{as_text, printable_runs};
-use super::{Collector, MAX_TEXT_BYTES, MAX_TEXT_FILE_BYTES, SecretScan, ValueChecks};
+use super::extract::{as_text, printable_runs};
+use super::{PackageString, Source, TextBudget, Visitor};
 use crate::android::dex::DexEntry;
 use crate::android::native::NativeLibrary;
 use crate::android::resources::{EntryValue, ResourceTable};
@@ -27,53 +27,51 @@ const BINARY_EXTENSIONS: [&str; 34] = [
     "mkv", "zip", "jar", "apk", "gz", "tflite", "riv", "lottie",
 ];
 
-/// Secrets in an APK.
-pub fn scan_apk<R: Read + Seek>(archive: &mut ZipArchive<R>, apk: &Apk) -> SecretScan {
-    let mut collector = Collector::new();
+/// Walks an APK's strings.
+pub fn walk_apk<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    apk: &Apk,
+    visitor: &mut impl Visitor,
+) {
     if let Some(Ok(table)) = &apk.resources {
-        resource_strings(&mut collector, "resources.arsc", table);
+        resource_strings(visitor, "resources.arsc", table);
     }
     for entry in &apk.dex_files {
-        dex_strings(&mut collector, entry);
+        dex_strings(visitor, entry);
     }
-    native_strings(&mut collector, archive, &apk.native_libraries);
-    text_files(&mut collector, archive, is_apk_text_candidate);
-    collector.finish()
+    native_strings(visitor, archive, &apk.native_libraries);
+    text_files(visitor, archive, is_apk_text_candidate);
 }
 
-/// Secrets in an app bundle, module by module.
-pub fn scan_bundle<R: Read + Seek>(archive: &mut ZipArchive<R>, bundle: &Bundle) -> SecretScan {
-    let mut collector = Collector::new();
+/// Walks an app bundle's strings, module by module.
+pub fn walk_bundle<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    bundle: &Bundle,
+    visitor: &mut impl Visitor,
+) {
     for module in &bundle.modules {
         if let Some(Ok(table)) = &module.resources {
-            resource_strings(
-                &mut collector,
-                &format!("{}/resources.pb", module.name),
-                table,
-            );
+            resource_strings(visitor, &format!("{}/resources.pb", module.name), table);
         }
         for entry in &module.dex_files {
-            dex_strings(&mut collector, entry);
+            dex_strings(visitor, entry);
         }
-        native_strings(&mut collector, archive, &module.native_libraries);
+        native_strings(visitor, archive, &module.native_libraries);
     }
-    text_files(&mut collector, archive, is_bundle_text_candidate);
-    collector.finish()
+    text_files(visitor, archive, is_bundle_text_candidate);
 }
 
-/// Every string resource in every configuration: known formats in each, and MobSF's key-name
-/// heuristic on the resource's name in the default configuration only (the first one when
-/// there is no default). MobSF applies the heuristic to every translation too, which reports a
-/// library's "Password" label once per language; a secret is not translated (PORTING.md
-/// deviation 36).
-fn resource_strings(collector: &mut Collector, location: &str, table: &ResourceTable) {
+/// Every distinct value of every string resource, in every configuration. The resource's name
+/// is given as the key with its default configuration's value only (the first value when
+/// there is no default): the others are translations of the same string.
+fn resource_strings(visitor: &mut impl Visitor, location: &str, table: &ResourceTable) {
     for id in table.ids_of_type("string") {
         let Some(name) = table.name(id) else {
             continue;
         };
         let context = format!("@string/{}", name.entry);
         let values = table.values(id);
-        let heuristic_config = values
+        let keyed = values
             .iter()
             .position(|value| value.config.is_default())
             .unwrap_or(0);
@@ -82,68 +80,44 @@ fn resource_strings(collector: &mut Collector, location: &str, table: &ResourceT
             let EntryValue::Simple(Value::String(Some(text))) = value.value else {
                 continue;
             };
-            let key_checked = position == heuristic_config;
-            if text.is_empty() || (!seen.insert(text.clone()) && !key_checked) {
+            let with_key = position == keyed;
+            if text.is_empty() || (!seen.insert(text.clone()) && !with_key) {
                 continue;
             }
-            collector.counts().resource_strings += 1;
-            collector.value(
+            visitor.string(&PackageString {
+                source: Source::Resource,
                 location,
-                Some(&context),
-                &text,
-                ValueChecks {
-                    key: key_checked.then_some(name.entry.as_str()),
-                    entropy: false,
-                },
-            );
+                context: Some(&context),
+                key: with_key.then_some(name.entry.as_str()),
+                text: &text,
+            });
         }
     }
 }
 
-/// MobSF's filter on code strings (`shared_func.py::strings_and_entropies`): at least four
-/// characters, starting with a letter or digit, not an escaped NUL or a `com.google.` name,
-/// and not a JVM or Android path.
-fn mobsf_code_string(text: &str) -> bool {
-    text.chars().count() >= 4
-        && text.chars().next().is_some_and(char::is_alphanumeric)
-        && !text.contains("\\u0")
-        && !text.contains("com.google.")
-        && !(text.contains('/')
-            && ["Ljava", "Lkotlin", "kotlin", "android"]
-                .iter()
-                .any(|word| text.contains(word)))
-}
-
-/// DEX strings that are not identifiers: known formats and MobSF's entropy heuristic, named
-/// by the class whose code loads them.
-fn dex_strings(collector: &mut Collector, entry: &DexEntry) {
+/// DEX strings that are not identifiers, named by the class whose code loads them.
+fn dex_strings(visitor: &mut impl Visitor, entry: &DexEntry) {
     for file in &entry.container.files {
         for (index, caller) in file.literal_strings() {
             let Some(text) = file.string(index) else {
                 continue;
             };
-            if !mobsf_code_string(text) {
-                continue;
-            }
-            collector.counts().code_strings += 1;
             let class = caller
                 .and_then(|method| file.method_class(method))
                 .map(class_name);
-            collector.value(
-                &entry.path,
-                class.as_deref(),
+            visitor.string(&PackageString {
+                source: Source::Code,
+                location: &entry.path,
+                context: class.as_deref(),
+                key: None,
                 text,
-                ValueChecks {
-                    key: None,
-                    entropy: true,
-                },
-            );
+            });
         }
     }
 }
 
 /// `Lcom/example/Config;` as `com.example.Config`.
-fn class_name(descriptor: &str) -> String {
+pub(crate) fn class_name(descriptor: &str) -> String {
     descriptor
         .strip_prefix('L')
         .and_then(|name| name.strip_suffix(';'))
@@ -151,11 +125,11 @@ fn class_name(descriptor: &str) -> String {
         .replace('/', ".")
 }
 
-/// Strings in each native library's read-only data (its `.rodata` and `.data` sections, or
-/// its non-executable loaded segments when it has no section headers; the whole file when it
-/// is not ELF): known formats and MobSF's entropy heuristic.
+/// Strings in each native library's read-only data (its `.rodata` and `.data` sections, or its
+/// non-executable loaded segments when it has no section headers; the whole file when it is
+/// not ELF), each distinct string once per library.
 fn native_strings<R: Read + Seek>(
-    collector: &mut Collector,
+    visitor: &mut impl Visitor,
     archive: &mut ZipArchive<R>,
     libraries: &[NativeLibrary],
 ) {
@@ -164,7 +138,7 @@ fn native_strings<R: Read + Seek>(
             Ok(Some(bytes)) => bytes,
             Ok(None) => continue,
             Err(error) => {
-                collector.skip(&library.path, error.to_string());
+                visitor.skipped(&library.path, &error.to_string());
                 continue;
             }
         };
@@ -181,34 +155,30 @@ fn native_strings<R: Read + Seek>(
                 if !seen.insert(string.clone()) {
                     continue;
                 }
-                collector.counts().binary_strings += 1;
-                collector.value(
-                    &library.path,
-                    None,
-                    &string,
-                    ValueChecks {
-                        key: None,
-                        entropy: true,
-                    },
-                );
+                visitor.string(&PackageString {
+                    source: Source::Binary,
+                    location: &library.path,
+                    context: None,
+                    key: None,
+                    text: &string,
+                });
             }
         }
     }
 }
 
 fn data_ranges(elf: &Elf) -> Vec<(u64, u64)> {
-    let sections: Vec<(u64, u64)> = elf
-        .sections
-        .iter()
-        .filter(|section| {
-            section.name.starts_with(".rodata")
-                || section.name == ".data"
-                || section.name == ".data.rel.ro"
-        })
-        .map(|section| (section.offset, section.size))
-        .collect();
     if !elf.sections.is_empty() {
-        return sections;
+        return elf
+            .sections
+            .iter()
+            .filter(|section| {
+                section.name.starts_with(".rodata")
+                    || section.name == ".data"
+                    || section.name == ".data.rel.ro"
+            })
+            .map(|section| (section.offset, section.size))
+            .collect();
     }
     elf.segments
         .iter()
@@ -249,10 +219,9 @@ fn has_binary_extension(path: &str) -> bool {
     })
 }
 
-/// Text files among the archive's entries: known formats, line by line; and file names
-/// gitleaks flags (PKCS #12 key stores) among every entry.
+/// Every entry's path to the visitor, and the text files among them, whole.
 fn text_files<R: Read + Seek>(
-    collector: &mut Collector,
+    visitor: &mut impl Visitor,
     archive: &mut ZipArchive<R>,
     candidate: fn(&str) -> bool,
 ) {
@@ -262,30 +231,23 @@ fn text_files<R: Read + Seek>(
         .filter(|entry| !entry.is_directory)
         .map(|entry| (entry.index, entry.name.clone(), entry.uncompressed_size))
         .collect();
+    let mut budget = TextBudget::new();
     for (index, path, size) in entries {
-        collector.file_name(&path);
+        visitor.file(&path);
         if !candidate(&path) || has_binary_extension(&path) {
             continue;
         }
-        if size > MAX_TEXT_FILE_BYTES {
-            collector.skip(
-                &path,
-                format!("{size} bytes: larger than the text file limit"),
-            );
+        if let Err(reason) = budget.take(size) {
+            visitor.skipped(&path, &reason);
             continue;
         }
-        if collector.text_bytes + size > MAX_TEXT_BYTES {
-            collector.skip(&path, "the text budget for this package was spent");
-            continue;
-        }
-        collector.text_bytes += size;
         match archive.read(index) {
             Ok(bytes) => {
                 if let Some(text) = as_text(&bytes) {
-                    collector.text_file(&path, &text);
+                    visitor.text_file(&path, &text);
                 }
             }
-            Err(error) => collector.skip(&path, error.to_string()),
+            Err(error) => visitor.skipped(&path, &error.to_string()),
         }
     }
 }
@@ -293,17 +255,6 @@ fn text_files<R: Read + Seek>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn mobsf_code_string_filter() {
-        assert!(mobsf_code_string("abcd"));
-        assert!(!mobsf_code_string("abc"));
-        assert!(!mobsf_code_string("_private"));
-        assert!(!mobsf_code_string("com.google.android.gms"));
-        assert!(!mobsf_code_string("Ljava/lang/String;"));
-        assert!(mobsf_code_string("kotlin is fine without a slash"));
-        assert_eq!(class_name("Lcom/example/Config;"), "com.example.Config");
-    }
 
     #[test]
     fn candidates() {
@@ -318,5 +269,6 @@ mod tests {
         ));
         assert!(!is_bundle_text_candidate("BUNDLE-METADATA/x/mapping.txt"));
         assert!(has_binary_extension("assets/logo.PNG"));
+        assert_eq!(class_name("Lcom/example/Config;"), "com.example.Config");
     }
 }

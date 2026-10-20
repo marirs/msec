@@ -5,28 +5,24 @@
 //! Ports MobSF's `secret_detection.py`, `entropy.py`, `shared_func.py::is_secret_key` and the
 //! string sources of `android/strings.py`, `ios/strings.py` and `ios/plist_analysis.py`, and
 //! adds gitleaks' rule set (MIT; see `rules.rs`) and text files MobSF does not read (assets,
-//! raw resources, bundle resources). Where msec reads its strings from:
+//! raw resources, bundle resources). The strings come from [`crate::package_strings`]; what each
+//! source gets:
 //!
-//! | Package | Source | Detectors |
-//! |---|---|---|
-//! | APK, AAB | resource strings (`resources.arsc`, `resources.pb`) | known formats; key name |
-//! | APK, AAB | DEX strings that are not identifiers (literals, static values, annotations) | known formats; entropy |
-//! | APK, AAB | native libraries' read-only data | known formats; entropy |
-//! | APK, AAB | text files (assets, `res/raw`, AAB `root/`) | known formats |
-//! | IPA | property lists in the bundle | known formats; key name |
-//! | IPA | executables' C strings (`__TEXT,__cstring`) | known formats; entropy |
-//! | IPA | other text files in the bundle | known formats |
+//! | Source | Detectors |
+//! |---|---|
+//! | resource strings | known formats; key name (default configuration) |
+//! | DEX strings that pass MobSF's code-string filter | known formats; entropy |
+//! | native libraries' and executables' strings | known formats; entropy |
+//! | property list values | known formats; key name |
+//! | text files | known formats |
 //!
 //! Secrets never leave this module in full: a finding carries a redacted form (a public
 //! prefix such as `ghp_`, and for credentials and client keys the last four characters) and
 //! the length. A secret's location and context (resource name, class, plist key, line) are
 //! what a reader needs to find and rotate it.
 
-pub mod android;
 mod generated;
-pub mod ios;
 pub(crate) mod rules;
-mod strings;
 
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -35,6 +31,8 @@ use std::hash::{Hash, Hasher};
 
 pub use rules::is_secret_key;
 use rules::{KnownDetector, class_of_gitleaks_rule};
+
+use crate::package_strings::{PackageString, Source, Visitor};
 
 /// Every known-format detector that matches `text` (a value, or a whole file at `path`), in
 /// detector order: MobSF's patterns, then gitleaks' rules; once per match. The building block
@@ -54,10 +52,6 @@ pub fn entropy_runs(text: &str) -> Vec<String> {
 /// Possible-secret findings kept per scan; heuristics on a large app can flag thousands of
 /// strings, and the rest are counted ([`SecretScan::possible_not_listed`]).
 const MAX_POSSIBLE_FINDINGS: usize = 500;
-/// Text files larger than this are skipped (and listed in [`SecretScan::skipped`]).
-pub(crate) const MAX_TEXT_FILE_BYTES: u64 = 16 * 1024 * 1024;
-/// Text read in all, per scan.
-pub(crate) const MAX_TEXT_BYTES: u64 = 256 * 1024 * 1024;
 
 /// What a secret is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -159,13 +153,7 @@ pub struct SecretFinding {
 }
 
 /// A file that was not read for secrets, and why.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Skipped {
-    /// The file.
-    pub path: String,
-    /// Why.
-    pub reason: String,
-}
+pub use crate::package_strings::Unread as Skipped;
 
 /// How much was read.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -220,7 +208,6 @@ pub(crate) struct Collector {
     /// Position in `scan.findings` of each (location, context, value hash).
     seen: HashMap<(String, Option<String>, u64), usize>,
     possible: usize,
-    pub(crate) text_bytes: u64,
 }
 
 impl Collector {
@@ -232,19 +219,7 @@ impl Collector {
             },
             seen: HashMap::new(),
             possible: 0,
-            text_bytes: 0,
         }
-    }
-
-    pub(crate) fn counts(&mut self) -> &mut SourceCounts {
-        &mut self.scan.counts
-    }
-
-    pub(crate) fn skip(&mut self, path: &str, reason: impl Into<String>) {
-        self.scan.skipped.push(Skipped {
-            path: path.to_owned(),
-            reason: reason.into(),
-        });
     }
 
     /// Known formats, then the heuristics asked for, on one value.
@@ -369,6 +344,116 @@ impl Collector {
         // Stable: within a class, findings stay in the order they were found.
         self.scan.findings.sort_by_key(|finding| finding.class);
         self.scan
+    }
+}
+
+/// MobSF's filter on code strings (`shared_func.py::strings_and_entropies`): at least four
+/// characters, starting with a letter or digit, not an escaped NUL or a `com.google.` name,
+/// and not a JVM or Android path.
+fn mobsf_code_string(text: &str) -> bool {
+    text.chars().count() >= 4
+        && text.chars().next().is_some_and(char::is_alphanumeric)
+        && !text.contains("\\u0")
+        && !text.contains("com.google.")
+        && !(text.contains('/')
+            && ["Ljava", "Lkotlin", "kotlin", "android"]
+                .iter()
+                .any(|word| text.contains(word)))
+}
+
+impl Visitor for Collector {
+    fn string(&mut self, string: &PackageString<'_>) {
+        let checks = match string.source {
+            Source::Resource => {
+                self.scan.counts.resource_strings += 1;
+                ValueChecks {
+                    key: string.key,
+                    entropy: false,
+                }
+            }
+            Source::Code => {
+                if !mobsf_code_string(string.text) {
+                    return;
+                }
+                self.scan.counts.code_strings += 1;
+                ValueChecks {
+                    key: None,
+                    entropy: true,
+                }
+            }
+            Source::Binary => {
+                self.scan.counts.binary_strings += 1;
+                ValueChecks {
+                    key: None,
+                    entropy: true,
+                }
+            }
+            Source::PropertyList => ValueChecks {
+                key: string.key,
+                entropy: false,
+            },
+        };
+        self.value(string.location, string.context, string.text, checks);
+    }
+
+    fn text_file(&mut self, location: &str, text: &str) {
+        Collector::text_file(self, location, text);
+    }
+
+    fn property_list(&mut self, _location: &str) {
+        self.scan.counts.property_lists += 1;
+    }
+
+    fn file(&mut self, path: &str) {
+        self.file_name(path);
+    }
+
+    fn skipped(&mut self, path: &str, reason: &str) {
+        self.scan.skipped.push(Skipped {
+            path: path.to_owned(),
+            reason: reason.to_owned(),
+        });
+    }
+}
+
+/// Secrets in APKs and app bundles.
+pub mod android {
+    use std::io::{Read, Seek};
+
+    use super::{Collector, SecretScan};
+    use crate::android::{Apk, Bundle};
+    use crate::archive::ZipArchive;
+    use crate::package_strings::android::{walk_apk, walk_bundle};
+
+    /// Secrets in an APK.
+    pub fn scan_apk<R: Read + Seek>(archive: &mut ZipArchive<R>, apk: &Apk) -> SecretScan {
+        let mut collector = Collector::new();
+        walk_apk(archive, apk, &mut collector);
+        collector.finish()
+    }
+
+    /// Secrets in an app bundle, module by module.
+    pub fn scan_bundle<R: Read + Seek>(archive: &mut ZipArchive<R>, bundle: &Bundle) -> SecretScan {
+        let mut collector = Collector::new();
+        walk_bundle(archive, bundle, &mut collector);
+        collector.finish()
+    }
+}
+
+/// Secrets in IPAs.
+pub mod ios {
+    use std::io::{Read, Seek};
+
+    use super::{Collector, SecretScan};
+    use crate::archive::ZipArchive;
+    use crate::ios::Ipa;
+    use crate::package_strings::ios::walk_ipa;
+
+    /// Secrets in the IPA's app bundle; an empty scan without one.
+    pub fn scan_ipa<R: Read + Seek>(archive: &mut ZipArchive<R>, ipa: &Ipa) -> SecretScan {
+        let mut collector = Collector::new();
+        walk_ipa(archive, ipa, &mut collector);
+        collector.finish()
     }
 }
 
@@ -501,6 +586,16 @@ fn redact(class: SecretClass, secret: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mobsf_code_string_filter() {
+        assert!(mobsf_code_string("abcd"));
+        assert!(!mobsf_code_string("abc"));
+        assert!(!mobsf_code_string("_private"));
+        assert!(!mobsf_code_string("com.google.android.gms"));
+        assert!(!mobsf_code_string("Ljava/lang/String;"));
+        assert!(mobsf_code_string("kotlin is fine without a slash"));
+    }
 
     #[test]
     fn redaction_keeps_only_public_parts() {

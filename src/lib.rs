@@ -41,6 +41,9 @@
 //! - [`ios::ats`]: App Transport Security with Apple's documented semantics.
 //! - [`secrets`]: hardcoded secrets in APKs, app bundles and IPAs: MobSF's known formats and
 //!   heuristics plus gitleaks' rules, reported redacted.
+//! - [`trackers`]: third-party trackers from the εxodus database, by code signature (Android)
+//!   and network signature (iOS); [`urls`] finds URLs as MobSF does.
+//! - [`package_strings`]: every string a package holds, walked once for the detectors above.
 //!
 //! See the repository README for the porting roadmap.
 //!
@@ -54,9 +57,12 @@ pub mod hashes;
 pub mod ios;
 pub mod macho;
 pub mod magic;
+pub mod package_strings;
 pub mod plist;
 pub mod scan_type;
 pub mod secrets;
+pub mod trackers;
+pub mod urls;
 
 pub use hashes::FileHashes;
 pub use scan_type::{Platform, ScanType, UnsupportedReason};

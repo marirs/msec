@@ -22,3 +22,10 @@ Secret detection rules (src/secrets/generated/gitleaks.rs) are generated from gi
 configuration (config/gitleaks.toml, release v8.30.1, https://github.com/gitleaks/gitleaks),
 Copyright (c) 2019 Zachary Rice, MIT License; the full license text is in
 src/secrets/generated/GITLEAKS-LICENSE.
+
+Tracker signatures (src/trackers/generated/exodus.rs) are generated from a snapshot of the
+εxodus tracker database (https://reports.exodus-privacy.eu.org/api/trackers), Copyright Exodus
+Privacy, made available under the Open Database License 1.0
+(https://opendatacommons.org/licenses/odbl/1.0/), with its contents under the Database Contents
+License 1.0 (https://opendatacommons.org/licenses/dbcl/1.0/). That file is a derivative database
+and is offered under the Open Database License 1.0, not under the GPL.

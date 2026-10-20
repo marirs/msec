@@ -182,6 +182,11 @@ pub struct PrivacyManifest {
     pub path: String,
     /// Why it could not be read as a plist, when it could not.
     pub problem: Option<String>,
+    /// `NSPrivacyTracking`: the code this manifest covers uses data for tracking.
+    pub tracking: Option<bool>,
+    /// `NSPrivacyTrackingDomains`: the domains it connects to for tracking, which iOS blocks
+    /// until the user allows tracking.
+    pub tracking_domains: Vec<String>,
 }
 
 impl Ipa {
@@ -303,10 +308,28 @@ fn read_app_bundle<R: Read + Seek>(
         })
         .map(|relative| {
             let manifest = format!("{path}{relative}");
-            let problem = read_plist(archive, &manifest).err();
+            let (problem, root) = match read_plist(archive, &manifest) {
+                Ok(parsed) => (None, Some(parsed.root)),
+                Err(problem) => (Some(problem), None),
+            };
+            let dictionary = root.as_ref().and_then(plist::Value::as_dictionary);
             PrivacyManifest {
                 path: manifest,
                 problem,
+                tracking: dictionary
+                    .and_then(|dictionary| dictionary.get("NSPrivacyTracking"))
+                    .and_then(plist::Value::as_bool),
+                tracking_domains: dictionary
+                    .and_then(|dictionary| dictionary.get("NSPrivacyTrackingDomains"))
+                    .and_then(plist::Value::as_array)
+                    .map(|domains| {
+                        domains
+                            .iter()
+                            .filter_map(plist::Value::as_str)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             }
         })
         .collect();

@@ -1,13 +1,13 @@
-//! Secrets in an IPA's app bundle: property lists (MobSF `ios/plist_analysis.py::
-//! get_plist_secrets`), the C strings of every executable (MobSF `ios/strings.py` reads the main
-//! executable's, frameworks' and libraries' strings), and the bundle's other text files, which
-//! MobSF reads for URLs only.
+//! The strings of an IPA's app bundle: property lists (as MobSF's `ios/plist_analysis.py::
+//! get_plist_secrets` reads them), the C strings of every executable (MobSF's `ios/strings.py`
+//! reads the main executable's, frameworks' and libraries' strings), and the bundle's other text
+//! files (MobSF reads them for URLs).
 
 use std::collections::HashSet;
 use std::io::{Read, Seek};
 
-use super::strings::{as_text, c_strings, printable_runs};
-use super::{Collector, MAX_TEXT_BYTES, MAX_TEXT_FILE_BYTES, SecretScan, ValueChecks};
+use super::extract::{as_text, c_strings, printable_runs};
+use super::{PackageString, Source, TextBudget, Visitor};
 use crate::archive::ZipArchive;
 use crate::ios::{BundleBinary, Ipa};
 use crate::plist::{self, Value};
@@ -38,11 +38,14 @@ const SKIPPED_EXTENSIONS: [&str; 22] = [
     "dylib",
 ];
 
-/// Secrets in the IPA's app bundle; an empty scan without one.
-pub fn scan_ipa<R: Read + Seek>(archive: &mut ZipArchive<R>, ipa: &Ipa) -> SecretScan {
-    let mut collector = Collector::new();
+/// Walks the strings of the IPA's app bundle; nothing without one.
+pub fn walk_ipa<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    ipa: &Ipa,
+    visitor: &mut impl Visitor,
+) {
     let Some(app) = &ipa.app else {
-        return collector.finish();
+        return;
     };
     let entries: Vec<(usize, String, u64)> = archive
         .entries()
@@ -50,43 +53,35 @@ pub fn scan_ipa<R: Read + Seek>(archive: &mut ZipArchive<R>, ipa: &Ipa) -> Secre
         .filter(|entry| !entry.is_directory && entry.name.starts_with(&app.path))
         .map(|entry| (entry.index, entry.name.clone(), entry.uncompressed_size))
         .collect();
+    let mut budget = TextBudget::new();
     for (index, path, size) in entries {
-        collector.file_name(&path);
+        visitor.file(&path);
         if let Some(binary) = app.binaries.iter().find(|binary| binary.path == path) {
-            executable_strings(&mut collector, archive, binary);
+            executable_strings(visitor, archive, binary);
             continue;
         }
         if path.contains("/_CodeSignature/") || skipped_extension(&path) {
             continue;
         }
-        if size > MAX_TEXT_FILE_BYTES {
-            collector.skip(
-                &path,
-                format!("{size} bytes: larger than the text file limit"),
-            );
+        if let Err(reason) = budget.take(size) {
+            visitor.skipped(&path, &reason);
             continue;
         }
-        if collector.text_bytes + size > MAX_TEXT_BYTES {
-            collector.skip(&path, "the text budget for this package was spent");
-            continue;
-        }
-        collector.text_bytes += size;
         let bytes = match archive.read(index) {
             Ok(bytes) => bytes,
             Err(error) => {
-                collector.skip(&path, error.to_string());
+                visitor.skipped(&path, &error.to_string());
                 continue;
             }
         };
         if path.ends_with(".plist")
             && let Ok(parsed) = plist::parse(&bytes)
         {
-            property_list(&mut collector, &path, &parsed.root);
+            property_list(visitor, &path, &parsed.root);
         } else if let Some(text) = as_text(&bytes) {
-            collector.text_file(&path, &text);
+            visitor.text_file(&path, &text);
         }
     }
-    collector.finish()
 }
 
 fn skipped_extension(path: &str) -> bool {
@@ -95,10 +90,10 @@ fn skipped_extension(path: &str) -> bool {
     })
 }
 
-/// Every string in a property list: known formats, and MobSF's key-name heuristic on the key
-/// it is stored under. The walk keeps its own stack: property lists nest up to 513 levels.
-fn property_list(collector: &mut Collector, location: &str, root: &Value) {
-    collector.counts().property_lists += 1;
+/// Every string in a property list, with its key path and the key it is stored under. The
+/// walk keeps its own stack: property lists nest up to 513 levels.
+fn property_list(visitor: &mut impl Visitor, location: &str, root: &Value) {
+    visitor.property_list(location);
     let mut stack: Vec<(String, Option<String>, &Value)> = vec![(String::new(), None, root)];
     while let Some((path, key, value)) = stack.pop() {
         match value {
@@ -106,15 +101,13 @@ fn property_list(collector: &mut Collector, location: &str, root: &Value) {
                 if text.is_empty() {
                     continue;
                 }
-                collector.value(
+                visitor.string(&PackageString {
+                    source: Source::PropertyList,
                     location,
-                    (!path.is_empty()).then_some(path.as_str()),
+                    context: (!path.is_empty()).then_some(path.as_str()),
+                    key: key.as_deref(),
                     text,
-                    ValueChecks {
-                        key: key.as_deref(),
-                        entropy: false,
-                    },
-                );
+                });
             }
             Value::Dictionary(dictionary) => {
                 // Reversed, so the walk visits keys in the order the file lists them.
@@ -138,10 +131,10 @@ fn property_list(collector: &mut Collector, location: &str, root: &Value) {
     }
 }
 
-/// C strings (`__TEXT,__cstring`) of every architecture of an executable; printable runs of
-/// the whole file when it is not Mach-O. Known formats and MobSF's entropy heuristic.
+/// C strings (`__TEXT,__cstring`) of every architecture of an executable, each once; printable
+/// runs of the whole file when it is not Mach-O.
 fn executable_strings<R: Read + Seek>(
-    collector: &mut Collector,
+    visitor: &mut impl Visitor,
     archive: &mut ZipArchive<R>,
     binary: &BundleBinary,
 ) {
@@ -149,7 +142,7 @@ fn executable_strings<R: Read + Seek>(
         Ok(Some(bytes)) => bytes,
         Ok(None) => return,
         Err(error) => {
-            collector.skip(&binary.path, error.to_string());
+            visitor.skipped(&binary.path, &error.to_string());
             return;
         }
     };
@@ -185,15 +178,12 @@ fn executable_strings<R: Read + Seek>(
         if !seen.insert(string.clone()) {
             continue;
         }
-        collector.counts().binary_strings += 1;
-        collector.value(
-            &binary.path,
-            None,
-            &string,
-            ValueChecks {
-                key: None,
-                entropy: true,
-            },
-        );
+        visitor.string(&PackageString {
+            source: Source::Binary,
+            location: &binary.path,
+            context: None,
+            key: None,
+            text: &string,
+        });
     }
 }
