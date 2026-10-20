@@ -2,22 +2,33 @@
 //! decompiled sources instead). Each finding names the API and the app methods that call it,
 //! the way Google Play's release dashboard lists them:
 //!
-//! - framework APIs the app calls that Android deprecated, or removed (calls then fail);
+//! - framework APIs the app refers to that Android deprecated, or removed from the public SDK;
 //! - for apps targeting API 35+, the window APIs Android 15 deprecated for edge-to-edge
 //!   (`setStatusBarColor` and friends no longer have an effect), and no sign that the app handles
 //!   window insets at all;
 //! - `BitmapFactory` decodes without `BitmapFactory.Options`, which load images at full
 //!   resolution;
-//! - an estimate of how much of the code is obfuscated, for Google Play's requirement of at least
-//!   25% optimization, obfuscation and shrinking for apps with more than 10 MB of DEX code (50
-//!   MB for games), enforced from February 2027.
+//! - partial wake locks acquired without a timeout;
+//! - an app that signs users in on phones and tablets with no Restore Credentials or Block Store
+//!   call, for Google Play's zero-tap sign-in restoration requirement (April 2027);
+//! - no sign of shrinking or obfuscation (no R8 marker, few renamed classes) in an app whose DEX
+//!   size makes Google Play's optimization requirement apply (more than 10 MB of DEX code, 50 MB
+//!   for games, from February 2027).
 //!
-//! References are what code names, not data flow: a call guarded by a version check is still
-//! a call, and a decode given a `null` `Options` is not found.
+//! References are what code names, not data flow or reachability. A reference to a removed API
+//! is not a confirmed failure: the call may sit behind a version check or in code that never
+//! runs, and the platform may still have the API (removed from the SDK, kept hidden). Each
+//! calling method says whether it reads the Android version, which is evidence of a guard, not
+//! proof. A decode given a `null` `Options` is not found.
+//!
+//! [`dex_optimization`] is a measurement, not a verdict: Google Play computes its own
+//! optimization, obfuscation and shrinking percentages, which a static estimate cannot
+//! reproduce.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::Severity;
+use super::store_checks::FormFactor;
 use crate::android::api::{self, ApiChange, AppClasses};
 use crate::android::dex::{DexEntry, DexFile, Target};
 use crate::android::manifest::Manifest;
@@ -50,6 +61,41 @@ const INSET_HANDLING: [&str; 6] = [
     "Landroidx/compose/foundation/layout/WindowInsets",
 ];
 
+/// Reads of the Android version: a method that makes one may guard its calls by release.
+const VERSION_CHECKS: [&str; 4] = [
+    "Landroid/os/Build$VERSION;->SDK_INT",
+    "Landroid/os/Build$VERSION;->SDK_INT_FULL",
+    "Landroid/os/ext/SdkExtensions;->getExtensionVersion",
+    "Landroidx/core/os/BuildCompat;->isAt",
+];
+
+/// `WakeLock.acquire()` without a timeout: the lock is held until released.
+const WAKE_LOCK_WITHOUT_TIMEOUT: &str = "Landroid/os/PowerManager$WakeLock;->acquire()V";
+
+/// Calls that sign a user in, by SDK: evidence the app has sign-in, which Google Play's
+/// restoration requirement applies to. A prefix of `class->member` in DEX notation. Only calls
+/// from outside the API's own package count, so an SDK calling itself is not taken for the app.
+const SIGN_IN_CALLS: [&str; 10] = [
+    "Landroidx/credentials/CredentialManager;->getCredential",
+    "Lcom/google/android/gms/auth/api/signin/GoogleSignIn;->",
+    "Lcom/google/android/gms/auth/api/identity/SignInClient;->beginSignIn",
+    "Lcom/google/firebase/auth/FirebaseAuth;->signIn",
+    "Landroid/accounts/AccountManager;->addAccountExplicitly",
+    "Lcom/facebook/login/LoginManager;->logIn",
+    "Lnet/openid/appauth/AuthorizationService;->performTokenRequest",
+    "Lcom/microsoft/identity/client/ISingleAccountPublicClientApplication;->signIn",
+    "Lcom/auth0/android/provider/WebAuthProvider;->login",
+    "Lcom/amplifyframework/auth/AuthCategory;->signIn",
+];
+
+/// References that restore sign-in on a new device: the Restore Credentials API (a restore key
+/// created through Credential Manager) or Block Store.
+const SIGN_IN_RESTORATION: [&str; 3] = [
+    "Landroidx/credentials/CreateRestoreCredentialRequest;",
+    "Lcom/google/android/gms/auth/blockstore/Blockstore;",
+    "Lcom/google/android/gms/auth/blockstore/BlockstoreClient;",
+];
+
 /// `BitmapFactory` decodes that take no `BitmapFactory.Options`, so cannot downsample.
 const BITMAP_WITHOUT_OPTIONS: [&str; 5] = [
     "Landroid/graphics/BitmapFactory;->decodeFile(Ljava/lang/String;)Landroid/graphics/Bitmap;",
@@ -64,9 +110,13 @@ const BITMAP_WITHOUT_OPTIONS: [&str; 5] = [
 pub enum CodeRule {
     /// A framework API Android deprecated.
     DeprecatedApi,
-    /// A framework API Android removed from the public SDK: calls fail on the releases without
-    /// it.
+    /// A framework API Android removed from the public SDK, referenced by at least one method
+    /// that does not read the Android version. A reference, not a confirmed failure: the call
+    /// fails only if it runs on a release whose platform no longer has the API.
     RemovedApi,
+    /// A removed framework API referenced only by methods that read the Android version, so
+    /// every call may be guarded.
+    RemovedApiVersionChecked,
     /// A window API Android 15 deprecated for edge-to-edge, in an app targeting API 35+.
     EdgeToEdgeDeprecatedApi,
     /// An app targeting API 35+ with no call that handles window insets or enables
@@ -74,9 +124,16 @@ pub enum CodeRule {
     EdgeToEdgeNotHandled,
     /// A `BitmapFactory` decode without `BitmapFactory.Options` (no downsampling).
     BitmapWithoutDownsampling,
-    /// Less than Google Play's minimum share of the code is obfuscated (estimated from class
-    /// names), in an app whose DEX size makes the requirement apply.
-    ObfuscationBelowPlayThreshold,
+    /// A partial wake lock acquired without a timeout.
+    WakeLockWithoutTimeout,
+    /// The app signs users in, on phones and tablets, and makes no Restore Credentials or Block
+    /// Store call: Google Play requires zero-tap sign-in restoration from April 2027. Sign-in is
+    /// recognised from calls into common sign-in SDKs; games are out of the requirement's scope.
+    SignInRestorationMissing,
+    /// No R8 marker and few renamed classes, in an app whose DEX size makes Google Play's
+    /// optimization requirement apply: no sign the code was shrunk or obfuscated. Not Google
+    /// Play's verdict, which only Play Console shows.
+    ShrinkingNotEvident,
 }
 
 impl CodeRule {
@@ -85,17 +142,20 @@ impl CodeRule {
         match self {
             Self::DeprecatedApi => "msec_code_deprecated_api",
             Self::RemovedApi => "msec_code_removed_api",
+            Self::RemovedApiVersionChecked => "msec_code_removed_api_version_checked",
             Self::EdgeToEdgeDeprecatedApi => "msec_store_edge_to_edge_deprecated_api",
             Self::EdgeToEdgeNotHandled => "msec_store_edge_to_edge_not_handled",
             Self::BitmapWithoutDownsampling => "msec_store_bitmap_without_downsampling",
-            Self::ObfuscationBelowPlayThreshold => "msec_store_dex_obfuscation_below_threshold",
+            Self::WakeLockWithoutTimeout => "msec_store_wake_lock_without_timeout",
+            Self::SignInRestorationMissing => "msec_store_sign_in_restoration_missing",
+            Self::ShrinkingNotEvident => "msec_store_dex_shrinking_not_evident",
         }
     }
 
     /// Severity on MobSF's scale.
     pub fn severity(self) -> Severity {
         match self {
-            Self::RemovedApi | Self::ObfuscationBelowPlayThreshold => Severity::Warning,
+            Self::RemovedApi | Self::ShrinkingNotEvident => Severity::Warning,
             _ => Severity::Info,
         }
     }
@@ -108,15 +168,29 @@ pub struct CodeFinding {
     pub rule: CodeRule,
     /// The API in DEX notation (`Landroid/view/Window;->setStatusBarColor(I)V`).
     pub api: Option<String>,
-    /// Calling methods in DEX notation, sorted, up to 20.
-    pub callers: Vec<String>,
+    /// Calling methods, sorted, up to 20.
+    pub callers: Vec<Caller>,
     /// All calling methods, listed or not.
     pub caller_count: usize,
+    /// Calling methods that read the Android version, listed or not.
+    pub version_checked_callers: usize,
     /// What it means, in words.
     pub detail: String,
 }
 
-/// How much of an app's code looks obfuscated, against Google Play's requirement.
+/// A method that refers to the API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Caller {
+    /// The method in DEX notation.
+    pub method: String,
+    /// It also reads the Android version (`Build.VERSION.SDK_INT` and the like), so its call may
+    /// be guarded by release. Evidence of a guard, not proof: the check may guard something
+    /// else, and a guard in the method's own callers is not seen.
+    pub checks_version: bool,
+}
+
+/// How much of an app's code looks shrunk and obfuscated: an estimate from the build's markers
+/// and class names, not Google Play's measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DexOptimization {
     /// Uncompressed size of all DEX files.
@@ -143,6 +217,14 @@ impl DexOptimization {
     /// Google Play's requirement applies (enough DEX code).
     pub fn play_requirement_applies(&self) -> bool {
         self.dex_bytes > self.play_threshold_bytes
+    }
+
+    /// The build shows shrinking or obfuscation: R8 ran (its marker is present), or at least
+    /// Google Play's minimum share of classes was renamed by some obfuscator. Evidence about the
+    /// build, not Google Play's verdict: Play measures optimization, obfuscation and shrinking
+    /// separately, and its percentages are in Play Console.
+    pub fn shrinking_evident(&self) -> bool {
+        self.r8 || self.obfuscated_percent() >= PLAY_DEX_MINIMUM_PERCENT
     }
 }
 
@@ -201,7 +283,7 @@ fn looks_obfuscated(descriptor: &str) -> bool {
 }
 
 /// `android:appCategory="game"` (0) or `android:isGame="true"` on `<application>`.
-fn is_game(document: Option<&XmlDocument>) -> bool {
+pub fn is_game(document: Option<&XmlDocument>) -> bool {
     let Some(application) = document
         .and_then(|document| document.root.as_ref())
         .and_then(|root| root.elements_named("application").next())
@@ -231,19 +313,14 @@ pub fn analyse_code(
     let mut findings = Vec::new();
     for (api, (change, callers)) in &calls.framework {
         let (rule, detail) = match (change.removed_in, change.deprecated_in) {
-            (Some(removed), _) => (
-                CodeRule::RemovedApi,
-                format!(
-                    "removed in API {removed}: calls fail on Android releases from API {removed}"
-                ),
-            ),
+            (Some(removed), _) => removed_api(api, removed, callers, &calls.version_checking),
             (None, Some(deprecated)) => (
                 CodeRule::DeprecatedApi,
                 format!("deprecated in API {deprecated}"),
             ),
             (None, None) => continue,
         };
-        findings.push(finding(rule, Some(api), callers, detail));
+        findings.push(calls.finding(rule, Some(api), callers, detail));
     }
     if target_sdk >= EDGE_TO_EDGE_FROM {
         for api in EDGE_TO_EDGE_DEPRECATED {
@@ -251,7 +328,7 @@ pub fn analyse_code(
                 let detail = "deprecated in API 35; has no effect on Android 15+, where apps \
                               targeting API 35 are edge-to-edge"
                     .to_owned();
-                findings.push(finding(
+                findings.push(calls.finding(
                     CodeRule::EdgeToEdgeDeprecatedApi,
                     Some(api),
                     callers,
@@ -264,16 +341,13 @@ pub fn analyse_code(
             .keys()
             .any(|api| INSET_HANDLING.iter().any(|prefix| api.starts_with(prefix)));
         if !handles_insets {
-            findings.push(CodeFinding {
-                rule: CodeRule::EdgeToEdgeNotHandled,
-                api: None,
-                callers: Vec::new(),
-                caller_count: 0,
-                detail: format!(
+            findings.push(app_wide(
+                CodeRule::EdgeToEdgeNotHandled,
+                format!(
                     "targets API {target_sdk}, so it is edge-to-edge on Android 15+, and no code \
                      enables edge-to-edge or handles window insets"
                 ),
-            });
+            ));
         }
     }
     for api in BITMAP_WITHOUT_OPTIONS {
@@ -282,7 +356,7 @@ pub fn analyse_code(
                 "decodes at full resolution: no BitmapFactory.Options, so no inSampleSize \
                           downsampling"
                     .to_owned();
-            findings.push(finding(
+            findings.push(calls.finding(
                 CodeRule::BitmapWithoutDownsampling,
                 Some(api),
                 callers,
@@ -290,57 +364,165 @@ pub fn analyse_code(
             ));
         }
     }
-    let optimization = dex_optimization(dex_files, manifest_document);
-    if optimization.play_requirement_applies()
-        && optimization.obfuscated_percent() < PLAY_DEX_MINIMUM_PERCENT
+    if let Some(callers) = calls.direct.get(WAKE_LOCK_WITHOUT_TIMEOUT) {
+        let detail = "acquired without a timeout: the wake lock stays held until the app \
+                      releases it, and one never released keeps the device awake"
+            .to_owned();
+        findings.push(calls.finding(
+            CodeRule::WakeLockWithoutTimeout,
+            Some(WAKE_LOCK_WITHOUT_TIMEOUT),
+            callers,
+            detail,
+        ));
+    }
+    let restoration_applies =
+        FormFactor::of(manifest) == FormFactor::PhoneTablet && !is_game(manifest_document);
+    if restoration_applies && let Some((api, callers)) = sign_in_without_restoration(&calls.direct)
     {
-        findings.push(CodeFinding {
-            rule: CodeRule::ObfuscationBelowPlayThreshold,
-            api: None,
-            callers: Vec::new(),
-            caller_count: 0,
-            detail: format!(
-                "about {}% of {} classes look obfuscated ({}); Google Play requires at least {}% \
-                 for apps with more than {} MB of DEX code ({} MB here){}",
+        let detail = format!(
+            "signs users in ({}) and makes no Restore Credentials or Block Store call. From April \
+             2027 Google Play requires apps with sign-in to restore it on a new device without \
+             user action (phones and tablets); Block Store integrations in production by 30 \
+             September 2026 also count",
+            java_like(api)
+        );
+        findings.push(calls.finding(
+            CodeRule::SignInRestorationMissing,
+            Some(api),
+            &callers,
+            detail,
+        ));
+    }
+    let optimization = dex_optimization(dex_files, manifest_document);
+    if optimization.play_requirement_applies() && !optimization.shrinking_evident() {
+        findings.push(app_wide(
+            CodeRule::ShrinkingNotEvident,
+            format!(
+                "no R8 marker in any DEX file, and about {}% of {} class names look obfuscated \
+                 (estimated from class names): no sign the code was shrunk or obfuscated. Google \
+                 Play requires at least {}% optimization, obfuscation and shrinking for apps with \
+                 more than {} MB of DEX code ({} MB here) from February 2027, and measures them \
+                 itself",
                 optimization.obfuscated_percent(),
                 optimization.classes,
-                if optimization.r8 {
-                    "R8 ran"
-                } else {
-                    "no R8 marker: R8 did not run"
-                },
                 PLAY_DEX_MINIMUM_PERCENT,
                 optimization.play_threshold_bytes / (1024 * 1024),
                 optimization.dex_bytes / (1024 * 1024),
-                ", enforced from February 2027"
             ),
-        });
+        ));
     }
     findings.sort_by(|left, right| (left.rule, &left.api).cmp(&(right.rule, &right.api)));
     findings
 }
 
-fn finding(
-    rule: CodeRule,
-    api: Option<&str>,
+/// A removed API: which rule, by whether every calling method reads the Android version, and
+/// what it means. Worded as a reference, never as a failure: version checks, code that never
+/// runs and a platform that kept the API hidden all prevent one, and none is decided here.
+fn removed_api(
+    api: &str,
+    removed: u16,
     callers: &BTreeSet<String>,
-    detail: String,
-) -> CodeFinding {
+    version_checking: &HashSet<String>,
+) -> (CodeRule, String) {
+    let checked = callers
+        .iter()
+        .filter(|caller| version_checking.contains(*caller))
+        .count();
+    let error = match api.split_once("->") {
+        Some((_, member)) if member.contains('(') => "NoSuchMethodError",
+        Some(_) => "NoSuchFieldError",
+        None => "NoClassDefFoundError",
+    };
+    let consequence = format!(
+        "removed from the public SDK in API {removed}. A call that runs on API {removed} or later \
+         fails with {error} if that release's platform no longer has the API; a version check, \
+         or code that never runs, prevents that, and reachability is not analysed"
+    );
+    if checked == callers.len() {
+        let detail = format!(
+            "{consequence}. Every referencing method reads the Android version, so each call may \
+             be guarded"
+        );
+        (CodeRule::RemovedApiVersionChecked, detail)
+    } else {
+        let detail = format!(
+            "{consequence}. {} of {} referencing methods read the Android version",
+            checked,
+            callers.len()
+        );
+        (CodeRule::RemovedApi, detail)
+    }
+}
+
+/// The first sign-in call made from outside the signing-in SDK's own package, with those
+/// callers, when nothing references the Restore Credentials API or Block Store.
+fn sign_in_without_restoration(
+    direct: &HashMap<String, BTreeSet<String>>,
+) -> Option<(&str, BTreeSet<String>)> {
+    let restores = direct.keys().any(|api| {
+        SIGN_IN_RESTORATION
+            .iter()
+            .any(|prefix| api.starts_with(prefix))
+    });
+    if restores {
+        return None;
+    }
+    let mut sign_ins: Vec<(&str, BTreeSet<String>)> = direct
+        .iter()
+        .filter(|(api, _)| SIGN_IN_CALLS.iter().any(|prefix| api.starts_with(prefix)))
+        .filter_map(|(api, callers)| {
+            let package = api
+                .split_once("->")
+                .map_or(api.as_str(), |(class, _)| class);
+            let package = &package[..package.rfind('/').unwrap_or(0) + 1];
+            let outside: BTreeSet<String> = callers
+                .iter()
+                .filter(|caller| !caller.starts_with(package))
+                .cloned()
+                .collect();
+            (!outside.is_empty()).then_some((api.as_str(), outside))
+        })
+        .collect();
+    sign_ins.sort_by(|left, right| left.0.cmp(right.0));
+    sign_ins.into_iter().next()
+}
+
+/// `Landroid/accounts/AccountManager;->addAccountExplicitly(...)Z` as
+/// `android.accounts.AccountManager.addAccountExplicitly`, for details.
+fn java_like(signature: &str) -> String {
+    let (class, member) = signature.split_once("->").unwrap_or((signature, ""));
+    let class = class
+        .trim_start_matches('L')
+        .trim_end_matches(';')
+        .replace(['/', '$'], ".");
+    let name = member.split('(').next().unwrap_or_default();
+    if name.is_empty() {
+        class
+    } else {
+        format!("{class}.{name}")
+    }
+}
+
+/// A finding about the app as a whole, not an API.
+fn app_wide(rule: CodeRule, detail: String) -> CodeFinding {
     CodeFinding {
         rule,
-        api: api.map(str::to_owned),
-        callers: callers.iter().take(MAX_CALLERS).cloned().collect(),
-        caller_count: callers.len(),
+        api: None,
+        callers: Vec::new(),
+        caller_count: 0,
+        version_checked_callers: 0,
         detail,
     }
 }
 
-/// Who calls what, across all DEX files: references as written (`direct`, by signature) and
-/// the deprecated or removed framework APIs they reach (`framework`).
+/// Who calls what, across all DEX files: references as written (`direct`, by signature), the
+/// deprecated or removed framework APIs they reach (`framework`), and the methods that read the
+/// Android version (`version_checking`).
 #[derive(Default)]
 struct ReferenceIndex {
     direct: HashMap<String, BTreeSet<String>>,
     framework: BTreeMap<String, (ApiChange, BTreeSet<String>)>,
+    version_checking: HashSet<String>,
 }
 
 impl ReferenceIndex {
@@ -364,9 +546,13 @@ impl ReferenceIndex {
                     .entry((class.clone(), member.clone()))
                     .or_insert_with(|| api::resolve(&class, &member, &app))
                     .clone();
+                let target = format!("{class}{member}");
+                if VERSION_CHECKS.iter().any(|check| target.starts_with(check)) {
+                    index.version_checking.insert(caller.clone());
+                }
                 index
                     .direct
-                    .entry(format!("{class}{member}"))
+                    .entry(target)
                     .or_default()
                     .insert(caller.clone());
                 if let Some(framework) = framework {
@@ -380,6 +566,35 @@ impl ReferenceIndex {
             }
         }
         index
+    }
+
+    /// A finding about `api`, naming its callers and whether each reads the Android version.
+    fn finding(
+        &self,
+        rule: CodeRule,
+        api: Option<&str>,
+        callers: &BTreeSet<String>,
+        detail: String,
+    ) -> CodeFinding {
+        let checks_version = |method: &String| self.version_checking.contains(method);
+        CodeFinding {
+            rule,
+            api: api.map(str::to_owned),
+            callers: callers
+                .iter()
+                .take(MAX_CALLERS)
+                .map(|method| Caller {
+                    method: method.clone(),
+                    checks_version: checks_version(method),
+                })
+                .collect(),
+            caller_count: callers.len(),
+            version_checked_callers: callers
+                .iter()
+                .filter(|method| checks_version(method))
+                .count(),
+            detail,
+        }
     }
 }
 
@@ -432,7 +647,40 @@ fn app_classes(files: &[&DexFile]) -> AppClasses {
 
 #[cfg(test)]
 mod tests {
-    use super::looks_obfuscated;
+    use std::collections::{BTreeSet, HashMap};
+
+    use super::{looks_obfuscated, sign_in_without_restoration};
+
+    /// Sign-in counts from app code, not from the SDK calling itself, and a Restore Credentials
+    /// or Block Store reference anywhere satisfies the requirement.
+    #[test]
+    fn sign_in_needs_a_restoration_call() {
+        let calls = |entries: &[(&str, &str)]| {
+            let mut direct: HashMap<String, BTreeSet<String>> = HashMap::new();
+            for (api, caller) in entries {
+                direct
+                    .entry((*api).to_owned())
+                    .or_default()
+                    .insert((*caller).to_owned());
+            }
+            direct
+        };
+        let sign_in = "Lcom/google/firebase/auth/FirebaseAuth;->signInWithCredential(La;)Lb;";
+        let app = "Lcom/example/Login;->submit()V";
+        let sdk = "Lcom/google/firebase/auth/internal/Helper;->run()V";
+        let from_app = calls(&[(sign_in, app), (sign_in, sdk)]);
+        let (api, callers) = sign_in_without_restoration(&from_app).expect("sign-in from app code");
+        assert_eq!(api, sign_in);
+        assert_eq!(callers, BTreeSet::from([app.to_owned()]));
+        assert!(sign_in_without_restoration(&calls(&[(sign_in, sdk)])).is_none());
+        let restore =
+            "Landroidx/credentials/CreateRestoreCredentialRequest;-><init>(Ljava/lang/String;Z)V";
+        assert!(sign_in_without_restoration(&calls(&[(sign_in, app), (restore, app)])).is_none());
+        let block_store = "Lcom/google/android/gms/auth/blockstore/Blockstore;";
+        assert!(
+            sign_in_without_restoration(&calls(&[(sign_in, app), (block_store, app)])).is_none()
+        );
+    }
 
     #[test]
     fn obfuscated_class_names_are_short() {

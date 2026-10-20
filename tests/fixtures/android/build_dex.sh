@@ -4,7 +4,7 @@
 #   experimental container format, behind a D8 system property); dex/r8.dex: R8's shrunk and
 #   obfuscated output for the same classes;
 # - code.apk: the code/ app with classes.dex (code/java/primary) and classes2.dex
-#   (code/java/secondary);
+#   (code/java/secondary); code/java/stubs declares removed framework APIs for javac only;
 # - dex/container.dex and dex/hostile/*.dex: synthetic files from make_dex_fixtures.py;
 # - dex/**/*.dexdump.txt, dex/*.disassembly.txt and dex/art-verdicts.txt: what AOSP's dexdump
 #   (ART's DEX loader and verifier) reads in each file, its disassembly, and whether it accepts
@@ -23,7 +23,10 @@ trap 'rm -rf "$work"' EXIT
 compile() { # source directory, output directory
   mkdir -p "$2"
   find "$1" -name '*.java' | sort > "$work/sources"
-  javac --release 8 -nowarn -Xlint:-options -encoding UTF-8 -cp "$platform" -d "$2" @"$work/sources"
+  # The stubs come first on the class path: they declare APIs Android removed from android.jar,
+  # so the fixture can call them. Their classes are not in "$2" and are never dexed.
+  javac --release 8 -nowarn -Xlint:-options -encoding UTF-8 -cp "$work/stubs:$platform" -d "$2" \
+    @"$work/sources"
   find "$2" -name '*.class' | sort > "$2.list"
 }
 dex() { # min API, class list, output directory, extra D8 JVM flags...
@@ -34,6 +37,9 @@ dex() { # min API, class list, output directory, extra D8 JVM flags...
     --min-api "$api" --output "$output" $(cat "$list")
 }
 
+mkdir -p "$work/stubs"
+javac --release 8 -nowarn -Xlint:-options -encoding UTF-8 -d "$work/stubs" \
+  $(find code/java/stubs -name '*.java' | sort)
 compile code/java/primary "$work/primary"
 compile code/java/secondary "$work/secondary"
 for pair in 21:035 24:037 26:038 28:039; do

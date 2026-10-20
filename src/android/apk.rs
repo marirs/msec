@@ -6,6 +6,7 @@ use super::analysis::{
     CodeFinding, DexOptimization, ManifestFinding, NativeFinding, NetworkFinding,
     NetworkSecurityConfig, SigningFinding, StoreFinding, analyse_code, analyse_manifest,
     analyse_native, analyse_network_security, analyse_signing, analyse_store, dex_optimization,
+    is_game,
 };
 use super::dex::{CodeSummary, DexEntry, read_dex_files, summarise};
 use super::inventory::Inventory;
@@ -167,7 +168,8 @@ impl Apk {
     }
 
     /// Findings on what the DEX code calls: deprecated and removed framework APIs,
-    /// edge-to-edge, bitmap decoding, obfuscation. Empty when the manifest could not be decoded.
+    /// edge-to-edge, bitmap decoding, wake locks, no sign of shrinking. Empty when the manifest
+    /// could not be decoded.
     pub fn code_findings(&self) -> Vec<CodeFinding> {
         self.manifest
             .as_ref()
@@ -181,7 +183,14 @@ impl Apk {
             .unwrap_or_default()
     }
 
-    /// How much of the code looks obfuscated, against Google Play's DEX requirement.
+    /// The manifest marks the app as a game (`appCategory="game"` or `isGame`), which changes
+    /// Google Play's DEX threshold and puts it outside the sign-in restoration requirement.
+    pub fn is_game(&self) -> bool {
+        is_game(self.manifest_document.as_ref().ok())
+    }
+
+    /// How much of the code looks shrunk and obfuscated: an estimate, not Google Play's
+    /// measurement.
     pub fn dex_optimization(&self) -> DexOptimization {
         dex_optimization(&self.dex_files, self.manifest_document.as_ref().ok())
     }

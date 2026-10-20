@@ -52,8 +52,8 @@ Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed 
 2. Android without a decompiler: binary XML and resource table decoding, manifest data and
    permissions, manifest analysis, network security config, certificate and signature
    verification, ELF checks, Google Play store readiness, a DEX reader for the class and string
-   inventory and code references with deprecated-API, edge-to-edge, bitmap and obfuscation
-   checks, app bundles module by module (done).
+   inventory and code references with deprecated- and removed-API, edge-to-edge, bitmap,
+   wake-lock, sign-in restoration and shrinking checks, app bundles module by module (done).
 3. Code rules and strings: a libsast-compatible pattern engine over decompiled sources (jadx as an
    optional external tool), strings and secrets, trackers, SBOM, scorecard.
 4. iOS: plist, ATS and permissions, Mach-O checks, Objective-C metadata, IPA binary rules.

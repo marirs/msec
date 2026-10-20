@@ -14,8 +14,8 @@ pub mod signing_checks;
 pub mod store_checks;
 
 pub use code_checks::{
-    CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT, analyse_code,
-    dex_optimization,
+    Caller, CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT, analyse_code,
+    dex_optimization, is_game,
 };
 pub use manifest_checks::{
     ExportReason, ManifestFinding, ManifestRule, PermissionLevel, Protection, analyse_manifest,

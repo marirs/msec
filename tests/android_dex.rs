@@ -565,8 +565,9 @@ fn code_references_match_the_disassembly() {
 
 /// What Google Play's release dashboard flags, found in the fixture's own calls (LegacyUi): the
 /// window colours Android 15 deprecated, a decode without BitmapFactory.Options, a deprecated
-/// method named through an app class, a deprecated superclass; and no inset handling while
-/// targeting API 36. Each finding names the calling methods.
+/// method named through an app class, a deprecated superclass, a wake lock without a timeout,
+/// sign-in without restoration; and no inset handling while targeting API 36. Removed APIs are told apart by whether every
+/// referencing method reads the Android version. Each finding names the calling methods.
 #[test]
 fn code_checks_find_what_google_play_flags() {
     use msec::android::analysis::CodeRule;
@@ -576,7 +577,14 @@ fn code_checks_find_what_google_play_flags() {
     let findings: Vec<(CodeRule, Option<String>, Vec<String>)> = apk
         .code_findings()
         .into_iter()
-        .map(|finding| (finding.rule, finding.api, finding.callers))
+        .map(|finding| {
+            let callers = finding
+                .callers
+                .into_iter()
+                .map(|caller| caller.method)
+                .collect();
+            (finding.rule, finding.api, callers)
+        })
         .collect();
     let legacy = |method: &str| format!("Ldev/appchk/fixture/code/LegacyUi;->{method}");
     let colour = legacy("colour(Landroid/app/Activity;)V");
@@ -610,6 +618,21 @@ fn code_checks_find_what_google_play_flags() {
             vec![colour.clone()],
         ),
         (
+            CodeRule::RemovedApi,
+            Some("Landroid/graphics/Canvas;->save(I)I".into()),
+            vec![
+                legacy("saveChecked(Landroid/graphics/Canvas;)I"),
+                legacy("saveLayer(Landroid/graphics/Canvas;)I"),
+            ],
+        ),
+        (
+            CodeRule::RemovedApiVersionChecked,
+            Some("Landroid/graphics/Picture;->writeToStream(Ljava/io/OutputStream;)V".into()),
+            vec![legacy(
+                "record(Landroid/graphics/Picture;Ljava/io/OutputStream;)V",
+            )],
+        ),
+        (
             CodeRule::EdgeToEdgeDeprecatedApi,
             Some(navigation.into()),
             vec![colour.clone()],
@@ -627,8 +650,46 @@ fn code_checks_find_what_google_play_flags() {
                 "thumbnail(Ljava/lang/String;)Landroid/graphics/Bitmap;",
             )],
         ),
+        (
+            CodeRule::WakeLockWithoutTimeout,
+            Some("Landroid/os/PowerManager$WakeLock;->acquire()V".into()),
+            vec![legacy("hold(Landroid/os/PowerManager;)V")],
+        ),
+        (
+            CodeRule::SignInRestorationMissing,
+            Some(
+                "Landroid/accounts/AccountManager;->addAccountExplicitly(Landroid/accounts/Account;Ljava/lang/String;Landroid/os/Bundle;)Z"
+                    .into(),
+            ),
+            vec![legacy(
+                "signIn(Landroid/accounts/AccountManager;Landroid/accounts/Account;)Z",
+            )],
+        ),
     ];
     assert_eq!(findings, expected);
+    // Which callers read the Android version, and the wording: a reference, not a failure.
+    let canvas = apk
+        .code_findings()
+        .into_iter()
+        .find(|finding| finding.rule == CodeRule::RemovedApi)
+        .unwrap();
+    let checked: Vec<bool> = canvas
+        .callers
+        .iter()
+        .map(|caller| caller.checks_version)
+        .collect();
+    assert_eq!(checked, [true, false]);
+    assert_eq!(canvas.version_checked_callers, 1);
+    assert!(
+        canvas
+            .detail
+            .contains("NoSuchMethodError if that release's platform")
+    );
+    assert!(
+        canvas
+            .detail
+            .contains("1 of 2 referencing methods read the Android version")
+    );
 }
 
 /// The obfuscation estimate on d8 output (nothing renamed, no R8) and on R8's shrunk output of
@@ -645,8 +706,10 @@ fn obfuscation_is_estimated_from_class_names() {
     };
     let d8 = dex_optimization(&[entry("v035.dex")], None);
     assert_eq!((d8.classes, d8.obfuscated_classes, d8.r8), (11, 0, false));
+    assert!(!d8.shrinking_evident());
     let r8 = dex_optimization(&[entry("r8.dex")], None);
     assert!(r8.r8);
+    assert!(r8.shrinking_evident());
     assert_eq!(r8.classes, 2);
     assert_eq!(r8.obfuscated_percent(), 50);
     // Small apps are below Google Play's 10 MB floor: the requirement does not apply.
