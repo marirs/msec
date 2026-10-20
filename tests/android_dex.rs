@@ -688,7 +688,7 @@ fn code_checks_find_what_google_play_flags() {
     assert!(
         canvas
             .detail
-            .contains("1 of 2 referencing methods read the Android version")
+            .contains("1 of 2 referencing methods also read the Android version (a heuristic")
     );
 }
 

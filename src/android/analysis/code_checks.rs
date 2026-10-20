@@ -114,8 +114,9 @@ pub enum CodeRule {
     /// that does not read the Android version. A reference, not a confirmed failure: the call
     /// fails only if it runs on a release whose platform no longer has the API.
     RemovedApi,
-    /// A removed framework API referenced only by methods that read the Android version, so
-    /// every call may be guarded.
+    /// A removed framework API referenced only by methods that also read the Android version.
+    /// A heuristic label, not a lower risk: a version read in the calling method does not show
+    /// that it guards this call, so the severity is the same as [`Self::RemovedApi`].
     RemovedApiVersionChecked,
     /// A window API Android 15 deprecated for edge-to-edge, in an app targeting API 35+.
     EdgeToEdgeDeprecatedApi,
@@ -126,9 +127,11 @@ pub enum CodeRule {
     BitmapWithoutDownsampling,
     /// A partial wake lock acquired without a timeout.
     WakeLockWithoutTimeout,
-    /// The app signs users in, on phones and tablets, and makes no Restore Credentials or Block
-    /// Store call: Google Play requires zero-tap sign-in restoration from April 2027. Sign-in is
-    /// recognised from calls into common sign-in SDKs; games are out of the requirement's scope.
+    /// The app calls a recognised sign-in SDK, on phones and tablets, and no recognised Restore
+    /// Credentials or Block Store API: Google Play requires zero-tap sign-in restoration from
+    /// April 2027. A heuristic both ways: sign-in through other SDKs is not seen, and not
+    /// finding the recognised restore APIs does not establish that restoration is missing
+    /// (it may be done another way). Games are out of the requirement's scope.
     SignInRestorationMissing,
     /// No R8 marker and few renamed classes, in an app whose DEX size makes Google Play's
     /// optimization requirement apply: no sign the code was shrunk or obfuscated. Not Google
@@ -155,7 +158,9 @@ impl CodeRule {
     /// Severity on MobSF's scale.
     pub fn severity(self) -> Severity {
         match self {
-            Self::RemovedApi | Self::ShrinkingNotEvident => Severity::Warning,
+            Self::RemovedApi | Self::RemovedApiVersionChecked | Self::ShrinkingNotEvident => {
+                Severity::Warning
+            }
             _ => Severity::Info,
         }
     }
@@ -380,10 +385,12 @@ pub fn analyse_code(
     if restoration_applies && let Some((api, callers)) = sign_in_without_restoration(&calls.direct)
     {
         // The sign-in API is the finding's `api`, so the detail does not repeat it.
-        let detail = "signs users in and makes no Restore Credentials or Block Store call. From \
-                      April 2027 Google Play requires apps with sign-in to restore it on a new \
-                      device without user action (phones and tablets); Block Store integrations \
-                      in production by 30 September 2026 also count"
+        let detail = "calls a recognised sign-in SDK, and no recognised Restore Credentials or \
+                      Block Store API (heuristic: restoration done another way is not seen, so \
+                      this does not establish that it is missing). From April 2027 Google Play \
+                      requires apps with sign-in to restore it on a new device without user \
+                      action (phones and tablets); Block Store integrations in production by 30 \
+                      September 2026 also count"
             .to_owned();
         findings.push(calls.finding(
             CodeRule::SignInRestorationMissing,
@@ -437,15 +444,18 @@ fn removed_api(
          fails with {error} if that release's platform no longer has the API; a version check, \
          or code that never runs, prevents that, and reachability is not analysed"
     );
+    // Heuristic: a version read elsewhere in the calling method may guard something else.
+    const HEURISTIC: &str = "a heuristic: reading the version in the same method does not show \
+                             that it guards this call";
     if checked == callers.len() {
         let detail = format!(
-            "{consequence}. Every referencing method reads the Android version, so each call may \
-             be guarded"
+            "{consequence}. Every referencing method also reads the Android version ({HEURISTIC})"
         );
         (CodeRule::RemovedApiVersionChecked, detail)
     } else {
         let detail = format!(
-            "{consequence}. {} of {} referencing methods read the Android version",
+            "{consequence}. {} of {} referencing methods also read the Android version \
+             ({HEURISTIC})",
             checked,
             callers.len()
         );
