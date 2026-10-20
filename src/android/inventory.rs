@@ -557,7 +557,7 @@ fn is_root_dex(name: &str) -> bool {
 }
 
 /// `classes.dex` is 1, `classes2.dex` is 2; anything else sorts last.
-fn dex_number(name: &str) -> u32 {
+pub(crate) fn dex_number(name: &str) -> u32 {
     let digits = &name["classes".len()..name.len() - ".dex".len()];
     if digits.is_empty() {
         1

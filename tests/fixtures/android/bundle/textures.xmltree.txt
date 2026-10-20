@@ -1,6 +1,6 @@
-N: dist=http://schemas.android.com/apk/distribution (line=3)
-  N: android=http://schemas.android.com/apk/res/android (line=0)
-    E: manifest (line=3)
+N: android=http://schemas.android.com/apk/res/android (line=4)
+  N: dist=http://schemas.android.com/apk/distribution (line=4)
+    E: manifest (line=4)
       A: package="dev.appchk.fixture.bundle" (Raw: "dev.appchk.fixture.bundle")
       A: split="textures" (Raw: "textures")
       A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37 (Raw: "37")
@@ -8,15 +8,15 @@ N: dist=http://schemas.android.com/apk/distribution (line=3)
       A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
       A: platformBuildVersionName=17 (Raw: "17")
         T: '\n  '
-        E: http://schemas.android.com/apk/distribution:module (line=6)
+        E: http://schemas.android.com/apk/distribution:module (line=8)
           A: http://schemas.android.com/apk/distribution:type="asset-pack" (Raw: "asset-pack")
             T: '\n    '
-            E: http://schemas.android.com/apk/distribution:delivery (line=7)
+            E: http://schemas.android.com/apk/distribution:delivery (line=9)
                 T: '\n      '
-                E: http://schemas.android.com/apk/distribution:fast-follow (line=8)
+                E: http://schemas.android.com/apk/distribution:fast-follow (line=10)
                 T: '\n    '
             T: '\n    '
-            E: http://schemas.android.com/apk/distribution:fusing (line=10)
+            E: http://schemas.android.com/apk/distribution:fusing (line=12)
               A: http://schemas.android.com/apk/distribution:include=true (Raw: "true")
             T: '\n  '
         T: '\n'

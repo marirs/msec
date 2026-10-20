@@ -12,7 +12,7 @@ seconds="${FUZZ_SECONDS:-60}"
 if [ "$#" -gt 0 ]; then
     targets=("$@")
 else
-    targets=(archive binary_xml protobuf_xml resource_table elf certificate dex apk bundle)
+    targets=(archive binary_xml protobuf_xml resource_table protobuf_resources elf certificate dex apk bundle)
 fi
 
 for target in "${targets[@]}"; do

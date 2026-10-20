@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A fast-follow asset pack: assets only. -->
-<manifest xmlns:dist="http://schemas.android.com/apk/distribution"
+<!-- A fast-follow asset pack: assets only, and no versionCode (bundletool refuses one on an
+     asset pack). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:dist="http://schemas.android.com/apk/distribution"
     package="dev.appchk.fixture.bundle"
     split="textures">
   <dist:module dist:type="asset-pack">

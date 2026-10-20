@@ -5,7 +5,8 @@
 
 use std::io::{Cursor, Write};
 
-use msec::android::bundle::{BundleProblem, Delivery, ModuleKind, RESOURCES_NOT_READ};
+use msec::android::ResourceTable;
+use msec::android::bundle::{BundleProblem, Delivery, ModuleKind};
 use msec::android::xml::{
     self, XmlAnomalyKind, XmlDocument, XmlElement, XmlError, XmlFormat, XmlNode,
 };
@@ -219,8 +220,8 @@ fn a_bundle_lists_its_modules_and_their_delivery() {
     assert!(bundle.signing.v1.is_some() && bundle.signing.verified());
 }
 
-/// The base module as an APK: the manifest and an APK-shaped inventory; what is not read in a
-/// bundle says so.
+/// The base module as an APK: manifest, resources (from resources.pb), the network security
+/// configuration (protobuf XML), an APK-shaped inventory, and every module's code and libraries.
 #[test]
 fn the_base_module_reads_as_an_apk() {
     let bundle = Bundle::read(&mut archive(BUNDLE_BASE));
@@ -234,16 +235,177 @@ fn the_base_module_reads_as_an_apk() {
     assert_eq!(manifest.version_code, Some(12));
     assert_eq!(manifest.target_sdk(), Some(35));
     assert_eq!(base.version_name.as_deref(), Some("3.1"));
-    // @string/app_name needs resources.pb.
-    assert_eq!(base.label, None);
-    assert!(matches!(&base.resources, Some(Err(reason)) if reason == RESOURCES_NOT_READ));
-    assert!(matches!(base.network_security_config, Some(Err(_))));
+    // @string/app_name, resolved through resources.pb.
+    assert_eq!(base.label.as_deref(), Some("Bundle Fixture"));
+    assert!(matches!(base.resources, Some(Ok(_))));
+    assert_eq!(
+        base.network_security_config_path().as_deref(),
+        Some("res/xml/network_security_config.xml")
+    );
+    assert!(matches!(base.network_security_config, Some(Ok(_))));
     assert_eq!(base.inventory.dex_files, ["classes.dex"]);
     assert_eq!(base.inventory.abis.len(), 1);
-    assert!(base.native_libraries.is_empty() && base.dex_files.is_empty());
-    // Manifest checks run on it.
+    // Code and libraries, read and parsed, at their bundle paths.
+    assert_eq!(base.dex_files.len(), 1);
+    assert_eq!(base.dex_files[0].path, "base/dex/classes.dex");
+    assert!(base.dex_files[0].container.complete());
+    assert_eq!(base.native_libraries.len(), 1);
+    let library = &base.native_libraries[0];
+    assert_eq!(library.path, "base/lib/arm64-v8a/libapp.so");
+    assert_eq!(library.abi.as_deref(), Some("arm64-v8a"));
+    assert!(library.elf.is_ok() && !library.stored);
+    // Every APK check runs on it.
     assert!(!base.manifest_findings().is_empty());
     assert!(!base.store_findings("2026-10-14").is_empty());
+    assert!(library.hardening.is_some());
+}
+
+/// Feature modules are checked as part of the app: the camera module's exported activity is a
+/// component finding (with the base's target API deciding export defaults); app-wide settings
+/// stay the base's.
+#[test]
+fn feature_modules_are_checked_with_the_base_sdk_levels() {
+    let bundle = Bundle::read(&mut archive(BUNDLE));
+    let base = bundle.base.as_ref().unwrap().manifest.as_ref().unwrap();
+    let camera = &bundle.modules[1];
+    let findings = camera.manifest_findings(base);
+    assert!(!findings.is_empty());
+    assert!(findings.iter().all(|finding| finding.component.is_some()));
+    assert!(findings.iter().any(|finding| {
+        finding
+            .component
+            .as_ref()
+            .is_some_and(|(_, name)| name.ends_with("CaptureActivity"))
+    }));
+    // CAMERA is not a Play-restricted permission, and the module has no services.
+    assert!(camera.store_findings(base, "2026-10-14").is_empty());
+    assert!(bundle.modules[0].manifest_findings(base).is_empty());
+}
+
+/// The same resources compiled to resources.arsc (in the APK fixtures) and to resources.pb (as
+/// in a bundle) give the same IDs, names, values per configuration and locales.
+#[test]
+fn protobuf_and_binary_resource_tables_agree() {
+    for name in ["basic", "risky", "network", "store", "code"] {
+        let arsc = archive(&fixture(&format!("{name}.apk")))
+            .read_by_name("resources.arsc")
+            .unwrap()
+            .unwrap();
+        let binary = ResourceTable::parse(arsc).unwrap();
+        let protobuf =
+            ResourceTable::parse_proto(&fixture(&format!("proto/{name}.resources.pb"))).unwrap();
+        assert_eq!(binary.locales(), protobuf.locales(), "{name}");
+        assert_eq!(binary.package_names(), protobuf.package_names(), "{name}");
+        let resources = declared_resources(name);
+        assert!(!resources.is_empty(), "{name}");
+        for (kind, entry) in resources {
+            let id = binary.find(&kind, &entry);
+            assert!(id.is_some(), "{name}: {kind}/{entry}");
+            assert_eq!(id, protobuf.find(&kind, &entry), "{name}: {kind}/{entry}");
+            let id = id.unwrap();
+            assert_eq!(binary.name(id), protobuf.name(id), "{name}: {kind}/{entry}");
+            let values = |table: &ResourceTable| {
+                let mut values: Vec<(String, String)> = table
+                    .values(id)
+                    .iter()
+                    .map(|value| (value.config.qualifiers(), format!("{:?}", value.value)))
+                    .collect();
+                values.sort();
+                values
+            };
+            assert_eq!(values(&binary), values(&protobuf), "{name}: {kind}/{entry}");
+        }
+    }
+}
+
+/// `(type, name)` of every resource a fixture's res/ declares: `<string name=...>` and the like
+/// in values directories, file names elsewhere.
+fn declared_resources(fixture_name: &str) -> Vec<(String, String)> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/android")
+        .join(fixture_name)
+        .join("res");
+    let mut found = Vec::new();
+    for directory in std::fs::read_dir(root).unwrap() {
+        let directory = directory.unwrap().path();
+        let kind = directory
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .split('-')
+            .next()
+            .unwrap()
+            .to_owned();
+        for file in std::fs::read_dir(&directory).unwrap() {
+            let file = file.unwrap().path();
+            if kind == "values" {
+                let text = std::fs::read_to_string(&file).unwrap();
+                for tag in text.split('<').skip(1) {
+                    let tag = tag.split('>').next().unwrap();
+                    let Some((element, after)) = tag.split_once(" name=\"") else {
+                        continue;
+                    };
+                    let entry = after.split('"').next().unwrap();
+                    found.push((element.to_owned(), entry.to_owned()));
+                }
+            } else {
+                let stem = file.file_stem().unwrap().to_string_lossy().into_owned();
+                found.push((kind.clone(), stem));
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// bundletool builds the APKs Google Play serves from a bundle, converting each module's
+/// protobuf manifest to binary XML: the base and camera APKs it built from bundle.aab read as
+/// the manifests msec decoded from the bundle (bundletool adds its own split markers, so the
+/// app's declarations are compared).
+#[test]
+fn bundletool_apks_declare_what_msec_read_from_the_bundle() {
+    let bundle = Bundle::read(&mut archive(BUNDLE));
+    for (module, apk) in [
+        ("base", "bundle/base-master.apk"),
+        ("camera", "bundle/camera-master.apk"),
+    ] {
+        let from_bundle = bundle
+            .modules
+            .iter()
+            .find(|candidate| candidate.name == module)
+            .unwrap()
+            .manifest
+            .clone()
+            .unwrap();
+        let binary = archive(&fixture(apk))
+            .read_by_name("AndroidManifest.xml")
+            .unwrap()
+            .unwrap();
+        let from_apk = Manifest::from_document(&xml::parse(&binary).unwrap());
+        assert_eq!(from_apk.package, from_bundle.package, "{module}");
+        assert_eq!(from_apk.version_code, from_bundle.version_code, "{module}");
+        assert_eq!(
+            from_apk.min_sdk_version, from_bundle.min_sdk_version,
+            "{module}"
+        );
+        assert_eq!(
+            from_apk.target_sdk_version, from_bundle.target_sdk_version,
+            "{module}"
+        );
+        assert_eq!(
+            from_apk.uses_permissions, from_bundle.uses_permissions,
+            "{module}"
+        );
+        let components = |manifest: &Manifest| {
+            manifest
+                .application
+                .as_ref()
+                .map(|application| application.components.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(components(&from_apk), components(&from_bundle), "{module}");
+    }
 }
 
 fn zip(files: &[(&str, &[u8])]) -> Vec<u8> {

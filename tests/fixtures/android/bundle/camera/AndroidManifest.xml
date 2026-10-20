@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- An on-demand feature module that declares its own component and permission, which the
-     base manifest does not list. -->
+     base manifest does not list. Feature manifests carry the app's versionCode, as the Android
+     Gradle plugin writes them (bundletool requires it). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:dist="http://schemas.android.com/apk/distribution"
     package="dev.appchk.fixture.bundle"
-    split="camera">
+    split="camera"
+    android:versionCode="12"
+    android:versionName="3.1">
   <dist:module dist:title="Camera">
     <dist:delivery>
       <dist:on-demand/>

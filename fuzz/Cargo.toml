@@ -33,6 +33,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "protobuf_resources"
+path = "fuzz_targets/protobuf_resources.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "resource_table"
 path = "fuzz_targets/resource_table.rs"
 test = false

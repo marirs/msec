@@ -62,8 +62,28 @@ impl Apk {
             read_entry(archive, RESOURCE_TABLE_ENTRY)
                 .and_then(|bytes| ResourceTable::parse(bytes).map_err(|error| error.to_string()))
         });
-        let table = resources.as_ref().and_then(|result| result.as_ref().ok());
+        let mut apk = Self {
+            inventory,
+            manifest_document,
+            manifest,
+            resources,
+            label: None,
+            version_name: None,
+            locales: Vec::new(),
+            network_security_config: None,
+            signing: SigningReport::read(archive),
+            native_libraries: read_native_libraries(archive),
+            dex_files: Vec::new(),
+        };
+        apk.resolve_identity();
+        apk.dex_files = read_dex_files(archive, &apk.inventory.dex_files);
+        apk.network_security_config = apk.read_network_security_config(archive);
+        apk
+    }
 
+    /// Sets the label, version name and locales from the manifest and the resource table.
+    pub(crate) fn resolve_identity(&mut self) {
+        let table = self.resource_table();
         let resolve = |value: Option<&Value>| -> Option<String> {
             let value = value?;
             match table {
@@ -71,32 +91,22 @@ impl Apk {
                 None => value.as_str().map(str::to_owned),
             }
         };
-        let application = manifest
-            .as_ref()
-            .and_then(|manifest| manifest.application.as_ref());
+        let manifest = self.manifest.as_ref();
+        let application = manifest.and_then(|manifest| manifest.application.as_ref());
         let label = resolve(application.and_then(|application| application.label.as_ref()));
-        let version_name = resolve(
-            manifest
-                .as_ref()
-                .and_then(|manifest| manifest.version_name.as_ref()),
-        );
+        let version_name = resolve(manifest.and_then(|manifest| manifest.version_name.as_ref()));
         let locales = table.map(ResourceTable::locales).unwrap_or_default();
-        let mut apk = Self {
-            inventory,
-            manifest_document,
-            manifest,
-            resources,
-            label,
-            version_name,
-            locales,
-            network_security_config: None,
-            signing: SigningReport::read(archive),
-            native_libraries: read_native_libraries(archive),
-            dex_files: Vec::new(),
-        };
-        apk.dex_files = read_dex_files(archive, &apk.inventory.dex_files);
-        apk.network_security_config = apk.read_network_security_config(archive);
-        apk
+        self.label = label;
+        self.version_name = version_name;
+        self.locales = locales;
+    }
+
+    /// The manifest names a network security configuration.
+    pub(crate) fn network_security_config_declared(&self) -> bool {
+        self.manifest
+            .as_ref()
+            .and_then(|manifest| manifest.application.as_ref())
+            .is_some_and(|application| application.network_security_config.is_some())
     }
 
     fn read_network_security_config<R: Read + Seek>(

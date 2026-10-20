@@ -4,20 +4,25 @@
 //! (`resources.pb`) and assets; `BundleConfig.pb` at the root records the bundletool that built
 //! it, and `META-INF/` holds the upload key's JAR signature.
 //!
-//! This stage reads every module's manifest and what each module contains. The base module is
-//! also offered as an [`Apk`] ([`Bundle::base`]) so the manifest checks run unchanged.
-//!
-//! Deferred, and explicit in [`Bundle::base`]: the protobuf resource table (`resources.pb`), so
-//! manifest references (`@string/app_name`) stay unresolved and the network security
-//! configuration is not read; DEX files and native libraries, which are counted per module but
-//! not parsed.
+//! Every module is read: its manifest, its resource table, its DEX files in load order and its
+//! native libraries. The base module is also offered as an [`Apk`] ([`Bundle::base`]) holding
+//! the code and libraries of every module, so the APK checks run unchanged; feature modules'
+//! manifests are checked with the base module's SDK levels
+//! ([`BundleModule::manifest_findings`], [`BundleModule::store_findings`]).
 
 use std::io::{Read, Seek};
 
+use super::analysis::{
+    ManifestFinding, NetworkSecurityConfig, StoreFinding, StoreRule, analyse_manifest,
+    analyse_store,
+};
 use super::apk::Apk;
-use super::inventory::Inventory;
+use super::dex::{DexEntry, read_dex_files};
+use super::inventory::{Inventory, dex_number};
 use super::manifest::Manifest;
+use super::native::{NativeLibrary, read_library};
 use super::proto::{Fields, ProtoProblem};
+use super::resources::ResourceTable;
 use super::signing::SigningReport;
 use super::value::Value;
 use super::xml::{self, XmlDocument, XmlElement, XmlFormat};
@@ -33,11 +38,6 @@ const MANIFEST_PATH: &str = "manifest/AndroidManifest.xml";
 const BUNDLE_CONFIG: &str = "BundleConfig.pb";
 /// Root directories that are not modules.
 const NON_MODULE_DIRECTORIES: [&str; 2] = ["META-INF", "BUNDLE-METADATA"];
-/// Why a bundle's resources are unresolved, in [`Bundle::base`].
-pub const RESOURCES_NOT_READ: &str =
-    "the bundle's protobuf resource table (resources.pb) is not read in this build";
-/// Why a bundle's network security configuration is not read, in [`Bundle::base`].
-pub const NETWORK_CONFIG_NOT_READ: &str = "an app bundle's network security configuration is not read in this build: it needs the protobuf resource table";
 
 /// What a module is for.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -103,7 +103,7 @@ pub struct ModuleContents {
 }
 
 /// One module of a bundle.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct BundleModule {
     /// Directory name (`base`, `camera_feature`).
     pub name: String,
@@ -119,6 +119,14 @@ pub struct BundleModule {
     pub info: ModuleInfo,
     /// What the module directory holds.
     pub contents: ModuleContents,
+    /// The module's protobuf resource table: `None` without `resources.pb` (asset packs, code
+    /// modules without resources), else the table or why it could not be read.
+    pub resources: Option<Result<ResourceTable, String>>,
+    /// `dex/classes*.dex`, in the order Android loads them.
+    pub dex_files: Vec<DexEntry>,
+    /// `lib/<abi>/*.so`, parsed, with their hardening. Their place in the bundle's own ZIP says
+    /// nothing about the APKs bundletool builds, so they are never marked stored.
+    pub native_libraries: Vec<NativeLibrary>,
 }
 
 /// `BundleConfig.pb`, as far as msec reads it.
@@ -162,12 +170,11 @@ pub struct Bundle {
     pub signing: SigningReport,
     /// Structural problems, in the order found.
     pub problems: Vec<BundleProblem>,
-    /// The base module seen as an APK, for the checks that read one: its manifest, an
-    /// inventory of its files at the paths they take in the APK, and the bundle's signature.
-    /// Not read, so left as explicit errors: the resource table ([`RESOURCES_NOT_READ`]) and a
-    /// declared network security configuration ([`NETWORK_CONFIG_NOT_READ`]). Not parsed, so
-    /// left empty: native libraries and DEX files (counted in [`ModuleContents`]). `None`
-    /// without a base module.
+    /// The base module seen as an APK, for the checks that read one: its manifest, resource
+    /// table and network security configuration, an inventory of its files at the paths they
+    /// take in the APK (plus every module's libraries, for the ABIs the app ships), the DEX
+    /// files and native libraries of every module (base first, at their bundle paths), and the
+    /// bundle's signature. `None` without a base module.
     pub base: Option<Apk>,
 }
 
@@ -189,8 +196,8 @@ impl Bundle {
         let signing = SigningReport::read(archive);
         let base = modules
             .iter()
-            .find(|module| module.name == BASE_MODULE)
-            .map(|module| base_view(archive.entries(), module, &signing));
+            .position(|module| module.name == BASE_MODULE)
+            .map(|index| base_view(archive, &modules, index, &signing));
         Self {
             modules,
             config,
@@ -275,6 +282,13 @@ fn read_module<R: Read + Seek>(
         });
     }
     let contents = module_contents(archive.entries(), &name);
+    let resources = contents.resource_table.then(|| {
+        read(archive, &format!("{name}/resources.pb"))
+            .and_then(|bytes| ResourceTable::parse_proto(&bytes).map_err(|error| error.to_string()))
+    });
+    let dex_names = module_dex_names(archive.entries(), &name);
+    let dex_files = read_dex_files(archive, &dex_names);
+    let native_libraries = read_module_libraries(archive, &name);
     BundleModule {
         name,
         manifest_path,
@@ -283,7 +297,66 @@ fn read_module<R: Read + Seek>(
         manifest,
         info,
         contents,
+        resources,
+        dex_files,
+        native_libraries,
     }
+}
+
+fn read<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Result<Vec<u8>, String> {
+    archive
+        .read_by_name(name)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("{name} not found"))
+}
+
+/// `<module>/dex/classes*.dex` in load order (`classes.dex`, `classes2.dex`, ...); bundletool
+/// names a module's DEX files this way.
+fn module_dex_names(entries: &[Entry], module: &str) -> Vec<String> {
+    let prefix = format!("{module}/dex/");
+    let mut names: Vec<(u32, String)> = entries
+        .iter()
+        .filter(|entry| !entry.is_directory)
+        .filter_map(|entry| {
+            let file = entry.name.strip_prefix(&prefix)?;
+            (!file.contains('/') && file.starts_with("classes") && file.ends_with(".dex"))
+                .then(|| (dex_number(file), entry.name.clone()))
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names.into_iter().map(|(_, name)| name).collect()
+}
+
+/// `<module>/lib/<abi>/*.so`, each parsed.
+fn read_module_libraries<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    module: &str,
+) -> Vec<NativeLibrary> {
+    let prefix = format!("{module}/lib/");
+    let candidates: Vec<(usize, String, String, u64)> = archive
+        .entries()
+        .iter()
+        .filter(|entry| !entry.is_directory)
+        .filter_map(|entry| {
+            let (abi, file) = entry.name.strip_prefix(&prefix)?.split_once('/')?;
+            (file.ends_with(".so") && !file.contains('/')).then(|| {
+                (
+                    entry.index,
+                    entry.name.clone(),
+                    abi.to_owned(),
+                    entry.uncompressed_size,
+                )
+            })
+        })
+        .collect();
+    candidates
+        .into_iter()
+        .map(|(index, path, abi, size)| {
+            // The bundle's ZIP layout is not the APK's: never "stored", no data offset.
+            read_library(archive, index, path, Some(abi), false, None, size)
+        })
+        .collect()
 }
 
 impl ModuleInfo {
@@ -446,43 +519,115 @@ fn parse_config(bytes: &[u8]) -> Result<BundleConfig, ProtoProblem> {
     Ok(config)
 }
 
-/// The base module as an APK (see [`Bundle::base`]).
-fn base_view(entries: &[Entry], module: &BundleModule, signing: &SigningReport) -> Apk {
-    let apk_entries: Vec<Entry> = entries
+/// The base module as an APK (see [`Bundle::base`]): its manifest and resources, its network
+/// security configuration (protobuf XML, as bundletool stores `res/xml` files), an inventory of
+/// its files at their APK paths plus every module's libraries (for the ABIs the app ships), and
+/// the DEX files and native libraries of every module, base first.
+fn base_view<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    modules: &[BundleModule],
+    base_index: usize,
+    signing: &SigningReport,
+) -> Apk {
+    let module = &modules[base_index];
+    let apk_entries: Vec<Entry> = archive
+        .entries()
         .iter()
         .filter_map(|entry| {
-            let path = entry.name.strip_prefix(BASE_MODULE)?.strip_prefix('/')?;
-            let mut mapped = entry.clone();
-            mapped.name = apk_path(path);
-            Some(mapped)
+            let (directory, path) = entry.name.split_once('/')?;
+            let is_module = modules.iter().any(|module| module.name == directory);
+            let keep = directory == BASE_MODULE || (is_module && path.starts_with("lib/"));
+            keep.then(|| {
+                let mut mapped = entry.clone();
+                mapped.name = apk_path(path);
+                mapped
+            })
         })
         .collect();
-    let manifest = module.manifest.clone();
-    // Without the resource table only literal values are known.
-    let literal = |value: Option<&Value>| value.and_then(Value::as_str).map(str::to_owned);
-    let application = manifest
-        .as_ref()
-        .and_then(|manifest| manifest.application.as_ref());
-    let declares_network_config =
-        application.is_some_and(|application| application.network_security_config.is_some());
-    Apk {
+    let mut apk = Apk {
         inventory: Inventory::from_entries(&apk_entries),
         manifest_document: module.manifest_document.clone(),
-        label: literal(application.and_then(|application| application.label.as_ref())),
-        version_name: literal(
-            manifest
-                .as_ref()
-                .and_then(|manifest| manifest.version_name.as_ref()),
-        ),
-        manifest,
-        resources: Some(Err(RESOURCES_NOT_READ.to_owned())),
+        manifest: module.manifest.clone(),
+        resources: module.resources.clone(),
+        label: None,
+        version_name: None,
         locales: Vec::new(),
-        network_security_config: declares_network_config
-            .then(|| Err(NETWORK_CONFIG_NOT_READ.to_owned())),
+        network_security_config: None,
         signing: signing.clone(),
-        // Deferred: native libraries and DEX files of bundles are counted, not parsed.
-        native_libraries: Vec::new(),
-        dex_files: Vec::new(),
+        native_libraries: modules
+            .iter()
+            .flat_map(|module| module.native_libraries.iter().cloned())
+            .collect(),
+        dex_files: modules
+            .iter()
+            .flat_map(|module| module.dex_files.iter().cloned())
+            .collect(),
+    };
+    apk.resolve_identity();
+    apk.network_security_config = apk.network_security_config_declared().then(|| {
+        let path = apk
+            .network_security_config_path()
+            .ok_or("the configuration does not resolve to a file")?;
+        let bytes = read(archive, &format!("{BASE_MODULE}/{path}"))?;
+        let document = match XmlFormat::detect(&bytes) {
+            Some(XmlFormat::Binary) => xml::parse(&bytes),
+            _ => xml::parse_proto(&bytes),
+        }
+        .map_err(|error| error.to_string())?;
+        Ok(NetworkSecurityConfig::from_document(
+            &document,
+            apk.resource_table(),
+        ))
+    });
+    apk
+}
+
+impl BundleModule {
+    /// This module's manifest with the base module's SDK levels and package, which feature
+    /// manifests do not repeat (Android applies the base's to every split). `None` for the
+    /// base module and for modules whose manifest did not decode.
+    fn manifest_in_app(&self, base: &Manifest) -> Option<Manifest> {
+        if self.name == BASE_MODULE {
+            return None;
+        }
+        let mut manifest = self.manifest.clone()?;
+        manifest.min_sdk_version = base.min_sdk_version.clone();
+        manifest.target_sdk_version = base.target_sdk_version.clone();
+        if manifest.package.is_none() {
+            manifest.package = base.package.clone();
+        }
+        Some(manifest)
+    }
+
+    /// Findings about the components this module declares, checked as part of the app (the
+    /// base module's SDK levels decide export defaults). App-wide settings are the base
+    /// manifest's, so findings without a component are left out. Empty for the base module.
+    pub fn manifest_findings(&self, base: &Manifest) -> Vec<ManifestFinding> {
+        let Some(manifest) = self.manifest_in_app(base) else {
+            return Vec::new();
+        };
+        analyse_manifest(&manifest, None)
+            .into_iter()
+            .filter(|finding| finding.component.is_some())
+            .collect()
+    }
+
+    /// Store findings about what this module declares: permissions Play restricts and
+    /// foreground service types. App-wide checks (target API, package name, versionCode, 64-bit
+    /// code) are the base module's. Empty for the base module.
+    pub fn store_findings(&self, base: &Manifest, today: &str) -> Vec<StoreFinding> {
+        let Some(manifest) = self.manifest_in_app(base) else {
+            return Vec::new();
+        };
+        let declarations = [
+            StoreRule::RestrictedPermission,
+            StoreRule::ForegroundServicePermissionMissing,
+            StoreRule::ForegroundServiceTypeMissing,
+        ];
+        analyse_store(&manifest, &Inventory::from_entries(&[]), today)
+            .into_iter()
+            .filter(|finding| declarations.contains(&finding.rule))
+            .collect()
     }
 }
 

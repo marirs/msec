@@ -1,0 +1,46 @@
+bundletool 1.18.3
+== bundle.aab: bundletool validate
+Feature modules:
+	Feature module: camera
+	Feature module: base
+		File: res/xml/network_security_config.xml
+		File: dex/classes.dex
+		File: lib/arm64-v8a/libapp.so
+Asset packs:
+	Asset pack: textures
+		File: assets/textures/stone.txt
+== bundle.aab: bundletool build-apks
+asset-slices/textures-master.apk
+splits/base-hdpi.apk
+splits/base-ldpi.apk
+splits/base-master.apk
+splits/base-mdpi.apk
+splits/base-tvdpi.apk
+splits/base-xhdpi.apk
+splits/base-xxhdpi.apk
+splits/base-xxxhdpi.apk
+splits/camera-hdpi.apk
+splits/camera-ldpi.apk
+splits/camera-master.apk
+splits/camera-mdpi.apk
+splits/camera-tvdpi.apk
+splits/camera-xhdpi.apk
+splits/camera-xxhdpi.apk
+splits/camera-xxxhdpi.apk
+toc.pb
+== bundle-base.aab: bundletool validate
+Feature modules:
+	Feature module: base
+		File: res/xml/network_security_config.xml
+		File: dex/classes.dex
+		File: lib/arm64-v8a/libapp.so
+== bundle-base.aab: bundletool build-apks
+splits/base-hdpi.apk
+splits/base-ldpi.apk
+splits/base-master.apk
+splits/base-mdpi.apk
+splits/base-tvdpi.apk
+splits/base-xhdpi.apk
+splits/base-xxhdpi.apk
+splits/base-xxxhdpi.apk
+toc.pb

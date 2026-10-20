@@ -11,6 +11,7 @@ use super::chunk::{
     CHUNK_HEADER_LENGTH, Chunk, ChunkProblem, RES_STRING_POOL_TYPE, RES_TABLE_PACKAGE_TYPE,
     RES_TABLE_TYPE, RES_TABLE_TYPE_TYPE, u16_at, u32_at,
 };
+use super::proto::ProtoProblem;
 use super::string_pool::{StringPool, StringPoolProblem};
 use super::value::Value;
 
@@ -47,6 +48,8 @@ pub enum ResourceError {
     Chunk(ChunkProblem),
     /// The global string pool is invalid.
     StringPool(StringPoolProblem),
+    /// A protobuf table (`resources.pb`) that protobuf's own parser rejects.
+    InvalidProtobuf(ProtoProblem),
 }
 
 impl fmt::Display for ResourceError {
@@ -55,6 +58,9 @@ impl fmt::Display for ResourceError {
             Self::NotResourceTable => write!(formatter, "not an Android resource table"),
             Self::Chunk(problem) => write!(formatter, "invalid resource table header: {problem:?}"),
             Self::StringPool(problem) => write!(formatter, "invalid string pool: {problem:?}"),
+            Self::InvalidProtobuf(problem) => {
+                write!(formatter, "invalid protobuf resource table: {problem:?}")
+            }
         }
     }
 }
@@ -113,7 +119,7 @@ pub struct Config {
 const CONFIG_READ_LENGTH: usize = 64;
 
 impl Config {
-    fn from_bytes(raw: &[u8]) -> Self {
+    pub(super) fn from_bytes(raw: &[u8]) -> Self {
         let mut bytes = raw[..raw.len().min(CONFIG_READ_LENGTH)].to_vec();
         bytes.resize(CONFIG_READ_LENGTH, 0);
         Self { bytes }
@@ -322,13 +328,28 @@ struct TypeChunk {
     config: Config,
 }
 
-/// A decoded `resources.arsc`.
+/// A decoded resource table: `resources.arsc` from an APK, or `resources.pb` from an app bundle
+/// ([`ResourceTable::parse_proto`]). Both answer the same questions the same way.
 #[derive(Debug, Clone)]
 pub struct ResourceTable {
+    source: TableSource,
+    anomalies: Vec<ResourceAnomaly>,
+}
+
+#[derive(Debug, Clone)]
+enum TableSource {
+    /// Binary `resources.arsc`, indexed once and decoded on demand.
+    Arsc(ArscTable),
+    /// aapt2's protobuf table, decoded whole (see [`super::proto_resources`]).
+    Protobuf(super::proto_resources::ProtoTable),
+}
+
+/// The binary table: its bytes, global string pool and package index.
+#[derive(Debug, Clone)]
+struct ArscTable {
     bytes: Vec<u8>,
     strings: Option<StringPool>,
     packages: Vec<Package>,
-    anomalies: Vec<ResourceAnomaly>,
 }
 
 impl ResourceTable {
@@ -364,10 +385,22 @@ impl ResourceTable {
             });
         }
         Ok(Self {
-            bytes,
-            strings,
-            packages,
+            source: TableSource::Arsc(ArscTable {
+                bytes,
+                strings,
+                packages,
+            }),
             anomalies,
+        })
+    }
+
+    /// Decodes aapt2's protobuf resource table (`resources.pb` in an app bundle module).
+    pub fn parse_proto(bytes: &[u8]) -> Result<Self, ResourceError> {
+        let table = super::proto_resources::ProtoTable::parse(bytes)
+            .map_err(ResourceError::InvalidProtobuf)?;
+        Ok(Self {
+            source: TableSource::Protobuf(table),
+            anomalies: Vec::new(),
         })
     }
 
@@ -378,45 +411,42 @@ impl ResourceTable {
 
     /// Package names, in table order.
     pub fn package_names(&self) -> Vec<String> {
-        self.packages
-            .iter()
-            .map(|package| package.name.clone())
-            .collect()
+        match &self.source {
+            TableSource::Arsc(table) => table.package_names(),
+            TableSource::Protobuf(table) => table.package_names(),
+        }
     }
 
     /// `package:type/entry` for a resource ID.
     pub fn name(&self, id: u32) -> Option<ResourceName> {
-        let (package, type_id, entry_index) = self.locate(id)?;
-        let type_name = self.type_name(package, type_id)?;
-        let entry = package
-            .types
-            .iter()
-            .filter(|chunk| chunk.type_id == type_id)
-            .find_map(|chunk| self.entry_key(package, chunk, entry_index))?;
-        Some(ResourceName {
-            package: package.name.clone(),
-            type_name,
-            entry,
-        })
+        match &self.source {
+            TableSource::Arsc(table) => table.name(id),
+            TableSource::Protobuf(table) => table.name(id),
+        }
     }
 
     /// Every configuration of a resource.
     pub fn values(&self, id: u32) -> Vec<ResourceValue> {
-        let Some((package, type_id, entry_index)) = self.locate(id) else {
-            return Vec::new();
-        };
-        package
-            .types
-            .iter()
-            .filter(|chunk| chunk.type_id == type_id)
-            .filter_map(|chunk| {
-                let value = self.entry_value(chunk, entry_index)?;
-                Some(ResourceValue {
-                    config: chunk.config.clone(),
-                    value,
-                })
-            })
-            .collect()
+        match &self.source {
+            TableSource::Arsc(table) => table.values(id),
+            TableSource::Protobuf(table) => table.values(id),
+        }
+    }
+
+    /// Resource ID of `type/entry` in the first package that has it.
+    pub fn find(&self, type_name: &str, entry_name: &str) -> Option<u32> {
+        match &self.source {
+            TableSource::Arsc(table) => table.find(type_name, entry_name),
+            TableSource::Protobuf(table) => table.find(type_name, entry_name),
+        }
+    }
+
+    /// Locales the app's strings are translated into, sorted (`de`, `en-GB`, `ja`).
+    pub fn locales(&self) -> Vec<String> {
+        match &self.source {
+            TableSource::Arsc(table) => table.locales(),
+            TableSource::Protobuf(table) => table.locales(),
+        }
     }
 
     /// The value for the default configuration (else English, else the first), following
@@ -445,8 +475,67 @@ impl ResourceTable {
         }
     }
 
+    /// File paths a resource points to (`res/xml/network_security_config.xml`), per
+    /// configuration.
+    pub fn files(&self, id: u32) -> Vec<(Config, String)> {
+        self.values(id)
+            .into_iter()
+            .filter_map(|resource| match resource.value {
+                EntryValue::Simple(Value::String(Some(path))) if path.starts_with("res/") => {
+                    Some((resource.config, path))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+impl ArscTable {
+    /// Package names, in table order.
+    fn package_names(&self) -> Vec<String> {
+        self.packages
+            .iter()
+            .map(|package| package.name.clone())
+            .collect()
+    }
+
+    /// `package:type/entry` for a resource ID.
+    fn name(&self, id: u32) -> Option<ResourceName> {
+        let (package, type_id, entry_index) = self.locate(id)?;
+        let type_name = self.type_name(package, type_id)?;
+        let entry = package
+            .types
+            .iter()
+            .filter(|chunk| chunk.type_id == type_id)
+            .find_map(|chunk| self.entry_key(package, chunk, entry_index))?;
+        Some(ResourceName {
+            package: package.name.clone(),
+            type_name,
+            entry,
+        })
+    }
+
+    /// Every configuration of a resource.
+    fn values(&self, id: u32) -> Vec<ResourceValue> {
+        let Some((package, type_id, entry_index)) = self.locate(id) else {
+            return Vec::new();
+        };
+        package
+            .types
+            .iter()
+            .filter(|chunk| chunk.type_id == type_id)
+            .filter_map(|chunk| {
+                let value = self.entry_value(chunk, entry_index)?;
+                Some(ResourceValue {
+                    config: chunk.config.clone(),
+                    value,
+                })
+            })
+            .collect()
+    }
+
     /// Resource ID of `type/entry` in the first package that has it.
-    pub fn find(&self, type_name: &str, entry_name: &str) -> Option<u32> {
+    fn find(&self, type_name: &str, entry_name: &str) -> Option<u32> {
         self.packages.iter().find_map(|package| {
             package
                 .types
@@ -468,7 +557,7 @@ impl ResourceTable {
     }
 
     /// Locales the app's strings are translated into, sorted (`de`, `en-GB`, `ja`).
-    pub fn locales(&self) -> Vec<String> {
+    fn locales(&self) -> Vec<String> {
         let mut locales = BTreeSet::new();
         for package in &self.packages {
             for chunk in &package.types {
@@ -480,20 +569,6 @@ impl ResourceTable {
             }
         }
         locales.into_iter().collect()
-    }
-
-    /// File paths a resource points to (`res/xml/network_security_config.xml`), per
-    /// configuration.
-    pub fn files(&self, id: u32) -> Vec<(Config, String)> {
-        self.values(id)
-            .into_iter()
-            .filter_map(|resource| match resource.value {
-                EntryValue::Simple(Value::String(Some(path))) if path.starts_with("res/") => {
-                    Some((resource.config, path))
-                }
-                _ => None,
-            })
-            .collect()
     }
 
     /// Package, type ID and entry index for a resource ID. Package ID 0 (a shared library's

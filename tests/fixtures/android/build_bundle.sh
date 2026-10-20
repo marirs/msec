@@ -7,11 +7,19 @@
 #   bundle layout and BundleConfig.pb from bundle/make_bundle.py (bundletool is not used).
 #   Both are signed with jarsigner and a fresh upload key each run (tests check structure, not
 #   key values).
-# - proto/<fixture>.AndroidManifest.pb and proto/<fixture>.xmltree.txt: each APK fixture's
-#   manifest linked in protobuf format, and aapt2's dump of it, the oracle the tests compare
+# - proto/<fixture>.AndroidManifest.pb, proto/<fixture>.resources.pb and
+#   proto/<fixture>.xmltree.txt: each APK fixture's manifest and resource table linked in
+#   protobuf format, and aapt2's dump of the manifest; the tests compare msec's protobuf
+#   decoding against the dump and against the binary APK built from the same sources.
+# - bundle/bundletool.txt, bundle/base-master.apk, bundle/camera-master.apk: Google's bundletool
+#   validates both bundles and builds their APKs (signed with the fixture key); its report and the
+#   APK list are kept as evidence that the bundles are valid, and two of the APKs it builds (binary
+#   manifests bundletool converted from the bundles' protobuf ones) are what the tests compare
 #   msec's protobuf decoding against.
 # Needs ANDROID_HOME (or the default macOS SDK location), build-tools 37.0.0, platform
-# android-37.0, and a JDK (keytool and jarsigner on PATH, or JAVA_HOME).
+# android-37.0, a JDK (keytool and jarsigner on PATH, or JAVA_HOME), and bundletool: the
+# command in BUNDLETOOL, else `bundletool` on PATH (Homebrew's bundletool, or
+# `java -jar bundletool-all-<version>.jar`).
 set -eu
 cd "$(dirname "$0")"
 sdk="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
@@ -42,6 +50,23 @@ for bundle in bundle.aab bundle-base.aab; do
   jarsigner -keystore "$work/upload.jks" -storepass fixture -keypass fixture \
     -sigalg SHA256withRSA -digestalg SHA-256 "$bundle" upload > /dev/null
 done
+bundletool="${BUNDLETOOL:-bundletool}"
+{
+  echo "bundletool $($bundletool version)"
+  for bundle in bundle bundle-base; do
+    echo "== $bundle.aab: bundletool validate"
+    $bundletool validate --bundle="$bundle.aab" > "$work/validate.txt"
+    sed -n '/^Feature modules:/,$p' "$work/validate.txt"
+    $bundletool build-apks --bundle="$bundle.aab" --output="$work/$bundle.apks" \
+      --aapt2="$aapt2" --ks="$work/upload.jks" --ks-pass=pass:fixture --ks-key-alias=upload \
+      --key-pass=pass:fixture > /dev/null
+    echo "== $bundle.aab: bundletool build-apks"
+    unzip -Z1 "$work/$bundle.apks" | sort
+  done
+} > bundle/bundletool.txt
+unzip -p "$work/bundle.apks" splits/base-master.apk > bundle/base-master.apk
+unzip -p "$work/bundle.apks" splits/camera-master.apk > bundle/camera-master.apk
+
 for module in base camera textures; do
   "$aapt2" dump xmltree --file AndroidManifest.xml "$work/$module.zip" > "bundle/$module.xmltree.txt"
 done
@@ -50,5 +75,6 @@ mkdir -p proto
 for fixture in basic risky network store code; do
   link_proto "$fixture/AndroidManifest.xml" "$work/$fixture.zip" "$fixture/res"
   unzip -p "$work/$fixture.zip" AndroidManifest.xml > "proto/$fixture.AndroidManifest.pb"
+  unzip -p "$work/$fixture.zip" resources.pb > "proto/$fixture.resources.pb"
   "$aapt2" dump xmltree --file AndroidManifest.xml "$work/$fixture.zip" > "proto/$fixture.xmltree.txt"
 done

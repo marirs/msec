@@ -194,22 +194,36 @@ pub fn read_native_libraries<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Vec
     candidates
         .into_iter()
         .map(|(index, path, stored, data_offset, size)| {
-            let elf = archive
-                .read(index)
-                .map_err(|_| ElfError::Truncated)
-                .and_then(|bytes| Elf::parse(&bytes));
-            let hardening = elf.as_ref().ok().map(Hardening::of);
-            NativeLibrary {
-                abi: abi_of(&path),
-                path,
-                stored,
-                data_offset,
-                size,
-                elf,
-                hardening,
-            }
+            let abi = abi_of(&path);
+            read_library(archive, index, path, abi, stored, data_offset, size)
         })
         .collect()
+}
+
+/// Reads and analyses one library entry.
+pub(crate) fn read_library<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    index: usize,
+    path: String,
+    abi: Option<String>,
+    stored: bool,
+    data_offset: Option<u64>,
+    size: u64,
+) -> NativeLibrary {
+    let elf = archive
+        .read(index)
+        .map_err(|_| ElfError::Truncated)
+        .and_then(|bytes| Elf::parse(&bytes));
+    let hardening = elf.as_ref().ok().map(Hardening::of);
+    NativeLibrary {
+        path,
+        abi,
+        stored,
+        data_offset,
+        size,
+        elf,
+        hardening,
+    }
 }
 
 fn abi_of(path: &str) -> Option<String> {

@@ -261,8 +261,8 @@ fn attribute(bytes: &[u8]) -> Result<XmlAttribute, ProtoProblem> {
     })
 }
 
-/// An `Item`; `None` when none of its values is set.
-fn item(bytes: &[u8]) -> Result<Option<Value>, ProtoProblem> {
+/// An `Item` (shared with the protobuf resource table); `None` when none of its values is set.
+pub(super) fn item(bytes: &[u8]) -> Result<Option<Value>, ProtoProblem> {
     let mut value = None;
     for field in Fields::new(bytes) {
         let (number, field) = field?;

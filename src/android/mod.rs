@@ -11,6 +11,7 @@ pub mod manifest;
 pub mod native;
 pub mod permissions;
 mod proto;
+mod proto_resources;
 mod proto_xml;
 pub mod resources;
 pub mod sdk;

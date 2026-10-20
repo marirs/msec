@@ -24,11 +24,14 @@ def bundle_config():
     return bytes([0x0A, len(bundletool)]) + bundletool
 
 
-def module_files(module, linked):
-    """(path in the bundle, bytes) for an aapt2 --proto-format output zip."""
+def module_files(module, linked, resources=True):
+    """(path in the bundle, bytes) for an aapt2 --proto-format output zip. Asset packs keep no
+    resource table (bundletool refuses one)."""
     with zipfile.ZipFile(linked) as archive:
         for name in sorted(archive.namelist()):
             data = archive.read(name)
+            if name == "resources.pb" and not resources:
+                continue
             if name == "AndroidManifest.xml":
                 yield f"{module}/manifest/AndroidManifest.xml", data
             else:
@@ -53,7 +56,7 @@ def main():
     ]
     write(out / "bundle-base.aab", base)
     features = list(module_files("camera", work / "camera.zip"))
-    textures = list(module_files("textures", work / "textures.zip"))
+    textures = list(module_files("textures", work / "textures.zip", resources=False))
     textures.append(("textures/assets/textures/stone.txt", (Path(__file__).parent / "textures/assets/textures/stone.txt").read_bytes()))
     write(out / "bundle.aab", base + features + textures)
 

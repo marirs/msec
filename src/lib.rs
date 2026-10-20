@@ -21,9 +21,10 @@
 //! - [`elf`] and [`android::native`]: native libraries and their hardening.
 //! - [`android::dex`]: DEX files (compiled code) in the order Android loads them: strings,
 //!   types and class definitions, with the structural problems ART rejects.
-//! - [`android::Bundle`]: Android App Bundles: modules, their delivery, and their manifests in
-//!   aapt2's protobuf XML ([`android::xml::parse_proto`]), with the base module readable as an
-//!   APK by the manifest checks.
+//! - [`android::Bundle`]: Android App Bundles, module by module: manifests in aapt2's protobuf
+//!   XML ([`android::xml::parse_proto`]), resource tables (`resources.pb`,
+//!   [`android::ResourceTable::parse_proto`]), DEX files and native libraries, with the base
+//!   module readable as an APK by every check.
 //!
 //! Android manifest, certificate, network-security-config and binary analysis follow in the
 //! next releases. See the repository README for the porting roadmap.
