@@ -2,7 +2,8 @@
 # Rebuilds msec's Mach-O fixtures (bin/) and Apple's reading of each (oracle/):
 # - bin/hardened: Objective-C under ARC, stack protector, stripped, ad-hoc signed with
 #   entitlements (codesign); bin/hardened-arm64e and bin/universal (lipo of both);
-# - bin/plain (C, linker-signed only), bin/no-canary (-fno-stack-protector), bin/manual (manual
+# - bin/plain (C, not signed), bin/no-canary (-fno-stack-protector), bin/unfortified (strcpy
+#   left as is: _FORTIFY_SOURCE off), bin/manual (manual
 #   reference counting), bin/debug (not stripped: a debug map in the symbol table), bin/library
 #   (a dylib), bin/swift, bin/unsigned (signature removed);
 # - bin/encrypted (hardened with cryptid set to 1), bin/tampered (one code byte changed after
@@ -39,6 +40,9 @@ xcrun lipo -create bin/hardened bin/hardened-arm64e -output bin/universal
 cc -Os -fstack-protector-strong -o bin/plain sources/plain.c
 cc -Os -fno-stack-protector -o bin/no-canary sources/plain.c
 sign bin/no-canary
+cc -Os -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -o bin/unfortified \
+  sources/plain.c
+sign bin/unfortified
 cc -Os -fno-objc-arc -fno-objc-convert-messages-to-runtime-calls -framework Foundation \
   -o bin/manual sources/manual.m
 sign bin/manual

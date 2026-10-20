@@ -642,3 +642,40 @@ fn exercise(bytes: &[u8]) {
         }
     }
 }
+
+/// The iOS executable checks on each fixture: what each build flag or edit leaves behind.
+#[test]
+fn binary_checks_follow_the_build() {
+    use msec::ios::analysis::{BinaryRule, analyse_binary};
+    use msec::ios::{BinaryRole, BundleBinary};
+
+    let rules = |name: &str| -> Vec<BinaryRule> {
+        let bytes = read(&format!("bin/{name}"));
+        let binary = BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, None, None);
+        let mut rules: Vec<BinaryRule> = analyse_binary(&binary)
+            .into_iter()
+            .map(|finding| finding.rule)
+            .collect();
+        rules.dedup();
+        rules
+    };
+    assert_eq!(rules("hardened"), []);
+    // strcpy is fortified (__strcpy_chk) by default: bounded at run time, not flagged.
+    assert_eq!(rules("plain"), [BinaryRule::Unsigned]);
+    assert_eq!(rules("unfortified"), [BinaryRule::UnboundedFunctions]);
+    assert_eq!(rules("no-canary"), [BinaryRule::NoStackCanary]);
+    assert_eq!(rules("stack-exec"), [BinaryRule::ExecutableStack]);
+    assert_eq!(rules("no-pie"), [BinaryRule::NotPie]);
+    assert_eq!(
+        rules("manual"),
+        [BinaryRule::NoStackCanary, BinaryRule::NoArc]
+    );
+    assert_eq!(rules("debug"), [BinaryRule::DebugSymbols]);
+    assert_eq!(rules("unsigned"), [BinaryRule::Unsigned]);
+    assert_eq!(rules("tampered"), [BinaryRule::SignatureMismatch]);
+    // Swift's own code does not use the stack protector: not flagged.
+    assert_eq!(rules("swift"), []);
+    // An App Store-encrypted image's pages cannot be checked: no mismatch claimed. (This
+    // fixture's cryptid was set after signing, which changed the load commands' page.)
+    assert_eq!(rules("encrypted"), []);
+}

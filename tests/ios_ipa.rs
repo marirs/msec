@@ -344,3 +344,46 @@ fn signature_checks_match_codesign() {
     assert_eq!(check.pages, Some(false));
     assert_eq!(check.mismatched_pages, [1]);
 }
+
+/// The checks on the fixture's executables: the development entitlement, and MobSF's
+/// stack-protector heuristic on the C components that have no stack buffers; changes after
+/// signing are caught.
+#[test]
+fn binary_checks_report_what_they_find() {
+    use msec::ios::analysis::{BinaryRule, analyse_binaries};
+
+    let findings = |name: &str| -> Vec<(BinaryRule, String)> {
+        analyse_binaries(&read_ipa(name).app.unwrap())
+            .into_iter()
+            .map(|finding| (finding.rule, finding.binary))
+            .collect()
+    };
+    let app = |path: &str| format!("Payload/Fixture.app/{path}");
+    assert_eq!(
+        findings("fixture.ipa"),
+        [
+            (
+                BinaryRule::NoStackCanary,
+                app("Frameworks/Lib.framework/Lib")
+            ),
+            (BinaryRule::NoStackCanary, app("Frameworks/libextra.dylib")),
+            (BinaryRule::NoStackCanary, app("PlugIns/Share.appex/Share")),
+            (BinaryRule::GetTaskAllow, app("Fixture")),
+        ]
+    );
+    for variant in [
+        "info-plist-after-signing.ipa",
+        "executable-after-signing.ipa",
+    ] {
+        assert!(
+            findings(variant).contains(&(BinaryRule::SignatureMismatch, app("Fixture"))),
+            "{variant}"
+        );
+    }
+    let detail = analyse_binaries(&read_ipa("info-plist-after-signing.ipa").app.unwrap())
+        .into_iter()
+        .find(|finding| finding.rule == BinaryRule::SignatureMismatch)
+        .unwrap()
+        .detail;
+    assert_eq!(detail, "Info.plist changed after signing");
+}

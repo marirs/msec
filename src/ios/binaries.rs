@@ -150,13 +150,6 @@ pub(super) fn read_binary<R: Read + Seek>(
             return binary;
         }
     };
-    let file = match parse(&bytes) {
-        Ok(file) => file,
-        Err(error) => {
-            binary.macho = Err(error.to_string());
-            return binary;
-        }
-    };
     let info_plist = archive
         .read_by_name(&format!("{bundle}Info.plist"))
         .ok()
@@ -165,22 +158,56 @@ pub(super) fn read_binary<R: Read + Seek>(
         .read_by_name(&format!("{bundle}_CodeSignature/CodeResources"))
         .ok()
         .flatten();
-    for slice in &file.slices {
-        let Ok(image) = &slice.image else {
-            continue;
+    BundleBinary::from_bytes(
+        path,
+        role,
+        &bytes,
+        info_plist.as_deref(),
+        resources.as_deref(),
+    )
+}
+
+impl BundleBinary {
+    /// Reads an executable from its bytes, checking each slice's signature against the
+    /// bundle's `Info.plist` and `CodeResources` when given (`None` for a lone binary).
+    pub fn from_bytes(
+        path: &str,
+        role: BinaryRole,
+        bytes: &[u8],
+        info_plist: Option<&[u8]>,
+        resources: Option<&[u8]>,
+    ) -> Self {
+        let mut binary = BundleBinary {
+            path: path.to_owned(),
+            role,
+            size: bytes.len() as u64,
+            macho: Err(String::new()),
+            signatures: Vec::new(),
         };
-        let start = slice.offset as usize;
-        let slice_bytes = &bytes[start..start + slice.size as usize];
-        binary.signatures.push(check(
-            slice.architecture(),
-            image,
-            slice_bytes,
-            info_plist.as_deref(),
-            resources.as_deref(),
-        ));
+        let file = match parse(bytes) {
+            Ok(file) => file,
+            Err(error) => {
+                binary.macho = Err(error.to_string());
+                return binary;
+            }
+        };
+        for slice in &file.slices {
+            let Ok(image) = &slice.image else {
+                continue;
+            };
+            let start = slice.offset as usize;
+            let slice_bytes = &bytes[start..start + slice.size as usize];
+            binary.signatures.push(check(
+                slice.architecture(),
+                image,
+                slice_bytes,
+                info_plist,
+                resources,
+            ));
+        }
+        binary.macho = Ok(file);
+        binary
     }
-    binary.macho = Ok(file);
-    binary
 }
 
 fn check(

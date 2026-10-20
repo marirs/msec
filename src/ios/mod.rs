@@ -10,6 +10,7 @@
 //! code signature checked against the bundle's files ([`BundleBinary`]); see
 //! `docs/PORTING.md`.
 
+pub mod analysis;
 mod binaries;
 mod info;
 mod ipa;
