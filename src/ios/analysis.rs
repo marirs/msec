@@ -12,6 +12,7 @@
 
 use super::{AppBundle, BundleBinary, SignatureKind};
 use crate::android::analysis::{Origin, Severity};
+use crate::macho::signer::Signer;
 use crate::macho::{Hardening, MachO};
 use crate::plist::Value;
 
@@ -69,6 +70,15 @@ pub enum BinaryRule {
     /// The main executable's entitlements allow debugging (`get-task-allow`): a development
     /// build (msec).
     GetTaskAllow,
+    /// The CMS signature does not verify over the CodeDirectory: the signature was changed, or
+    /// signs other code (msec).
+    CmsSignatureInvalid,
+    /// The signing certificate's chain does not end at one of Apple's root certificates, or a
+    /// link does not verify: stock iOS does not run it (msec).
+    SignerNotApple,
+    /// The CodeDirectory names a team other than the signing certificate's; iOS refuses such
+    /// code at install (msec; codesign --verify accepts it).
+    TeamMismatch,
 }
 
 impl BinaryRule {
@@ -87,6 +97,9 @@ impl BinaryRule {
             Self::WeakHashes => "msec_macho_weak_hashes",
             Self::InsecureRandom => "msec_macho_insecure_random",
             Self::GetTaskAllow => "msec_ios_get_task_allow",
+            Self::CmsSignatureInvalid => "msec_macho_cms_signature_invalid",
+            Self::SignerNotApple => "msec_macho_signer_not_apple",
+            Self::TeamMismatch => "msec_macho_team_mismatch",
         }
     }
 
@@ -99,7 +112,10 @@ impl BinaryRule {
             | Self::NoArc
             | Self::Unsigned
             | Self::SignatureMismatch
-            | Self::GetTaskAllow => Severity::High,
+            | Self::GetTaskAllow
+            | Self::CmsSignatureInvalid
+            | Self::SignerNotApple
+            | Self::TeamMismatch => Severity::High,
             Self::UnboundedFunctions | Self::WeakHashes | Self::RpathOutsideBundle => {
                 Severity::Warning
             }
@@ -113,7 +129,10 @@ impl BinaryRule {
             Self::Unsigned
             | Self::SignatureMismatch
             | Self::RpathOutsideBundle
-            | Self::GetTaskAllow => Origin::Msec,
+            | Self::GetTaskAllow
+            | Self::CmsSignatureInvalid
+            | Self::SignerNotApple
+            | Self::TeamMismatch => Origin::Msec,
             _ => Origin::MobSf,
         }
     }
@@ -259,15 +278,74 @@ fn signature_checks(binary: &BundleBinary, findings: &mut Vec<BinaryFinding>) {
                 mismatch(check).map(|why| (BinaryRule::SignatureMismatch, why))
             }
         };
-        if let Some((rule, detail)) = detail {
+        let signer = check
+            .signer
+            .as_ref()
+            .map(|signer| signer_problems(check, signer))
+            .unwrap_or_default();
+        for (rule, detail) in detail.into_iter().chain(signer) {
             findings.push(BinaryFinding {
                 rule,
                 binary: binary.path.clone(),
-                architecture,
+                architecture: architecture.clone(),
                 detail,
             });
         }
     }
+}
+
+/// What is wrong with who signed a slice: a CMS signature that does not verify (nothing else
+/// about the signer can then be trusted), else a chain not anchored to Apple and a team the
+/// certificate does not have.
+fn signer_problems(check: &super::SignatureCheck, signer: &Signer) -> Vec<(BinaryRule, String)> {
+    let named = signer
+        .common_name
+        .as_deref()
+        .unwrap_or("an unnamed certificate");
+    if let Err(problem) = &signer.signature {
+        return vec![(
+            BinaryRule::CmsSignatureInvalid,
+            format!("the CMS signature by {named} does not verify: {problem}"),
+        )];
+    }
+    let mut problems = Vec::new();
+    if !signer.apple_anchored {
+        let broken = signer
+            .chain
+            .iter()
+            .take(signer.chain.len().saturating_sub(1))
+            .find(|link| link.verified_by_next != Some(true));
+        let detail = match (broken, signer.chain.last()) {
+            (Some(link), _) => format!(
+                "signed by {named}; the chain breaks at {}: its issuer's signature does not \
+                 verify",
+                link.common_name
+                    .as_deref()
+                    .unwrap_or("an unnamed certificate")
+            ),
+            (None, Some(last)) => format!(
+                "signed by {named}; the chain ends at {}, which is not one of Apple's root \
+                 certificates",
+                last.common_name
+                    .as_deref()
+                    .unwrap_or("an unnamed certificate")
+            ),
+            (None, None) => format!("signed by {named}; the signer's certificate cannot be read"),
+        };
+        problems.push((BinaryRule::SignerNotApple, detail));
+    }
+    if let (Some(directory_team), Some(certificate_team)) = (&check.team_id, &signer.team_id)
+        && directory_team != certificate_team
+    {
+        problems.push((
+            BinaryRule::TeamMismatch,
+            format!(
+                "the CodeDirectory names team {directory_team}, the certificate ({named}) team \
+                 {certificate_team}"
+            ),
+        ));
+    }
+    problems
 }
 
 /// What does not match, in words; `None` when everything checked matches.
@@ -311,6 +389,9 @@ pub enum AppRule {
     /// The profile distributes the app outside the App Store (development, ad hoc,
     /// enterprise) (msec).
     ProfileDistribution,
+    /// The main executable's signing certificate is not among the profile's
+    /// `DeveloperCertificates`: iOS does not install the app (msec).
+    ProfileCertificateMismatch,
     /// `NSAllowsArbitraryLoads` is in effect: ATS is off for every connection (MobSF).
     AtsArbitraryLoads,
     /// `NSAllowsArbitraryLoads` is set but iOS 10+ ignores it, because a narrower key is
@@ -341,6 +422,7 @@ impl AppRule {
             Self::ProfileBundleMismatch => "msec_ios_profile_bundle_mismatch",
             Self::ProfileEntitlementsMismatch => "msec_ios_profile_entitlements_mismatch",
             Self::ProfileDistribution => "msec_ios_profile_distribution",
+            Self::ProfileCertificateMismatch => "msec_ios_profile_certificate_mismatch",
             Self::AtsArbitraryLoads => "msec_ios_ats_arbitrary_loads",
             Self::AtsArbitraryLoadsIgnored => "msec_ios_ats_arbitrary_loads_ignored",
             Self::AtsWebContent => "msec_ios_ats_web_content",
@@ -360,6 +442,7 @@ impl AppRule {
             | Self::ProfileExpired
             | Self::ProfileBundleMismatch
             | Self::ProfileEntitlementsMismatch
+            | Self::ProfileCertificateMismatch
             | Self::AtsArbitraryLoads
             | Self::AtsInsecureHttpDomain
             | Self::AtsWeakTlsDomain => Severity::High,
@@ -475,6 +558,36 @@ fn profile_checks(app: &AppBundle, today: &str, findings: &mut Vec<AppFinding>) 
                 mismatch.reason,
             );
         }
+    }
+    // The certificate that signed the main executable must be one the profile allows. Only
+    // a signature that verifies counts: a broken one is reported as such.
+    let signer_leaf = app
+        .binaries
+        .first()
+        .and_then(|binary| binary.signatures.first())
+        .and_then(|check| check.signer.as_ref())
+        .filter(|signer| signer.signature.is_ok())
+        .and_then(|signer| signer.leaf().map(|leaf| (signer, leaf)));
+    if let Some((signer, leaf)) = signer_leaf
+        && !profile.developer_certificates.is_empty()
+        && !profile
+            .developer_certificates
+            .iter()
+            .any(|allowed| allowed.sha256 == leaf.sha256)
+    {
+        let named = signer
+            .common_name
+            .clone()
+            .unwrap_or_else(|| leaf.subject.clone());
+        push(
+            AppRule::ProfileCertificateMismatch,
+            Some(named.clone()),
+            format!(
+                "{named} signed the app, but the profile allows only {} other certificate(s): \
+                 iOS does not install it",
+                profile.developer_certificates.len()
+            ),
+        );
     }
     let kind = profile.kind();
     if kind != ProfileKind::AppStore {

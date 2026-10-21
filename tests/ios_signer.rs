@@ -144,7 +144,21 @@ fn real_apple_signature() {
     ) else {
         return;
     };
-    let signature = main_signature(&read_ipa(Path::new(&path)));
+    let ipa = read_ipa(Path::new(&path));
+    // No signer finding on any executable of a bundle Apple's chain signed.
+    let signer_findings: Vec<_> = msec::ios::analysis::analyse_binaries(ipa.app.as_ref().unwrap())
+        .into_iter()
+        .filter(|finding| {
+            matches!(
+                finding.rule,
+                msec::ios::analysis::BinaryRule::CmsSignatureInvalid
+                    | msec::ios::analysis::BinaryRule::SignerNotApple
+                    | msec::ios::analysis::BinaryRule::TeamMismatch
+            )
+        })
+        .collect();
+    assert!(signer_findings.is_empty(), "{signer_findings:?}");
+    let signature = main_signature(&ipa);
     let signer = signature
         .signer
         .expect("an Apple-signed build has a CMS signature");
@@ -153,4 +167,61 @@ fn real_apple_signature() {
     assert_eq!(signer.team_id.as_deref(), Some(team.as_str()));
     assert_eq!(signature.team_id.as_deref(), Some(team.as_str()));
     assert_eq!(signer.chain.len(), 3);
+}
+
+/// The analysis findings each fixture's signer gives (msec origin): a CMS signature that does
+/// not verify, a chain not anchored to Apple (every fixture: the test root), a team the
+/// certificate does not have, and a signing certificate the profile does not list.
+#[test]
+fn signer_findings() {
+    use msec::ios::analysis::{AppRule, BinaryRule, analyse_app, analyse_binaries};
+    let signer_rules = [
+        BinaryRule::CmsSignatureInvalid,
+        BinaryRule::SignerNotApple,
+        BinaryRule::TeamMismatch,
+    ];
+    for (variant, binary_expected, profile_mismatch) in [
+        ("fixture", &[][..], false),
+        (
+            "certificate-development",
+            &[BinaryRule::SignerNotApple][..],
+            false,
+        ),
+        (
+            "certificate-distribution",
+            &[BinaryRule::SignerNotApple][..],
+            false,
+        ),
+        (
+            "certificate-not-in-profile",
+            &[BinaryRule::SignerNotApple][..],
+            true,
+        ),
+        (
+            "certificate-cms-tampered",
+            &[BinaryRule::CmsSignatureInvalid][..],
+            false,
+        ),
+        (
+            "certificate-team-mismatch",
+            &[BinaryRule::SignerNotApple, BinaryRule::TeamMismatch][..],
+            false,
+        ),
+    ] {
+        let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/{variant}.ipa")));
+        let app = ipa.app.as_ref().unwrap();
+        let mut found: Vec<BinaryRule> = analyse_binaries(app)
+            .into_iter()
+            .filter(|finding| {
+                finding.binary.ends_with("/Fixture") && signer_rules.contains(&finding.rule)
+            })
+            .map(|finding| finding.rule)
+            .collect();
+        found.sort();
+        assert_eq!(found, binary_expected, "{variant}");
+        let mismatch = analyse_app(app, "2026-10-21")
+            .iter()
+            .any(|finding| finding.rule == AppRule::ProfileCertificateMismatch);
+        assert_eq!(mismatch, profile_mismatch, "{variant}");
+    }
 }
