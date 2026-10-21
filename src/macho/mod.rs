@@ -11,6 +11,7 @@
 //! MobSF reads Mach-O with LIEF (and `macholib`); [`Hardening`] reproduces its `MachOChecksec`
 //! checks from the parsed image (see `docs/PORTING.md`).
 
+pub mod der_entitlements;
 mod hardening;
 mod image;
 pub mod signature;

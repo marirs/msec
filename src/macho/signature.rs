@@ -9,6 +9,7 @@
 //! certificates are not read yet: a CodeDirectory whose hashes all match proves the binary is
 //! unchanged since it was signed, not who signed it.
 
+use super::der_entitlements::{self, DerEntitlements, DerEntitlementsError};
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384};
 
@@ -111,7 +112,8 @@ pub struct CodeSignature {
     pub requirements: Option<Vec<u8>>,
     /// The XML entitlements, when present.
     pub entitlements: Option<Entitlements>,
-    /// The DER entitlements blob, whole (as hashed into special slot 7). Not decoded yet.
+    /// The DER entitlements blob, whole (as hashed into special slot 7); decoded by
+    /// [`CodeSignature::der_entitlements_decoded`].
     pub der_entitlements: Option<Vec<u8>>,
     /// The CMS signature's bytes (inside its wrapper); empty for an ad-hoc signature.
     pub cms: Option<Vec<u8>>,
@@ -197,6 +199,16 @@ impl CodeSignature {
         self.code_directories
             .iter()
             .max_by_key(|directory| rank(directory.hash_type))
+    }
+
+    /// The DER entitlements, decoded; `None` when the signature has none. iOS 15 and later
+    /// read these rather than the XML entitlements.
+    pub fn der_entitlements_decoded(
+        &self,
+    ) -> Option<Result<DerEntitlements, DerEntitlementsError>> {
+        self.der_entitlements
+            .as_ref()
+            .map(|blob| der_entitlements::decode(blob.get(8..).unwrap_or_default()))
     }
 
     /// Signed with a certificate: the CMS signature holds data. Ad-hoc signatures have an

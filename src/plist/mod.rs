@@ -166,6 +166,12 @@ impl Dictionary {
         self.entries.is_empty()
     }
 
+    /// Adds a key unless it is already there (then the first value stays); returns false for
+    /// a key already there. For readers of other encodings of dictionaries (DER entitlements).
+    pub(crate) fn insert_first(&mut self, key: String, value: Value) -> bool {
+        self.insert(key, value, Format::Binary)
+    }
+
     /// Adds a key the way Core Foundation's parser for `format` does: a binary plist keeps the
     /// first value, an XML one the last. Returns false when the key was already there.
     fn insert(&mut self, key: String, value: Value, format: Format) -> bool {

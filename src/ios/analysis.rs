@@ -12,6 +12,7 @@
 
 use super::{AppBundle, BundleBinary, SignatureKind};
 use crate::android::analysis::{Origin, Severity};
+use crate::macho::der_entitlements::same_entitlements;
 use crate::macho::signer::Signer;
 use crate::macho::{Hardening, MachO};
 use crate::plist::Value;
@@ -79,6 +80,9 @@ pub enum BinaryRule {
     /// The CodeDirectory names a team other than the signing certificate's; iOS refuses such
     /// code at install (msec; codesign --verify accepts it).
     TeamMismatch,
+    /// The DER entitlements, which iOS 15 and later read, say something other than the XML
+    /// ones, or cannot be read (msec).
+    EntitlementsDiffer,
 }
 
 impl BinaryRule {
@@ -100,6 +104,7 @@ impl BinaryRule {
             Self::CmsSignatureInvalid => "msec_macho_cms_signature_invalid",
             Self::SignerNotApple => "msec_macho_signer_not_apple",
             Self::TeamMismatch => "msec_macho_team_mismatch",
+            Self::EntitlementsDiffer => "msec_macho_entitlements_differ",
         }
     }
 
@@ -115,7 +120,8 @@ impl BinaryRule {
             | Self::GetTaskAllow
             | Self::CmsSignatureInvalid
             | Self::SignerNotApple
-            | Self::TeamMismatch => Severity::High,
+            | Self::TeamMismatch
+            | Self::EntitlementsDiffer => Severity::High,
             Self::UnboundedFunctions | Self::WeakHashes | Self::RpathOutsideBundle => {
                 Severity::Warning
             }
@@ -132,7 +138,8 @@ impl BinaryRule {
             | Self::GetTaskAllow
             | Self::CmsSignatureInvalid
             | Self::SignerNotApple
-            | Self::TeamMismatch => Origin::Msec,
+            | Self::TeamMismatch
+            | Self::EntitlementsDiffer => Origin::Msec,
             _ => Origin::MobSf,
         }
     }
@@ -154,9 +161,23 @@ pub struct BinaryFinding {
 /// Every check on every executable of the bundle that was read.
 pub fn analyse_binaries(app: &AppBundle) -> Vec<BinaryFinding> {
     let mut findings: Vec<BinaryFinding> = app.binaries.iter().flat_map(analyse_binary).collect();
+    // Either encoding counts: iOS 15 and later read the DER entitlements, earlier releases the
+    // XML ones.
+    let debuggable = |main: &BundleBinary| {
+        let xml = matches!(
+            main.entitlements(),
+            Some(Ok(entitlements)) if entitlements.root.get("get-task-allow") == Some(&Value::Boolean(true))
+        );
+        let der = main.images().any(|image| {
+            matches!(&image.signature, Some(Ok(signature)) if matches!(
+                signature.der_entitlements_decoded(),
+                Some(Ok(der)) if der.dictionary.get("get-task-allow") == Some(&Value::Boolean(true))
+            ))
+        });
+        xml || der
+    };
     if let Some(main) = app.binaries.first()
-        && let Some(Ok(entitlements)) = main.entitlements()
-        && entitlements.root.get("get-task-allow") == Some(&Value::Boolean(true))
+        && debuggable(main)
     {
         findings.push(BinaryFinding {
             rule: BinaryRule::GetTaskAllow,
@@ -191,6 +212,7 @@ pub fn analyse_binary(binary: &BundleBinary) -> Vec<BinaryFinding> {
             });
         };
         image_checks(image, &mut push);
+        entitlement_checks(image, &mut push);
     }
     signature_checks(binary, &mut findings);
     findings
@@ -292,6 +314,72 @@ fn signature_checks(binary: &BundleBinary, findings: &mut Vec<BinaryFinding>) {
             });
         }
     }
+}
+
+/// The two encodings of a signature's entitlements must agree: iOS 15 and later read the DER
+/// ones, earlier releases and most tools the XML ones, so a difference lets an app show one set
+/// and run with another.
+fn entitlement_checks(image: &MachO, push: &mut impl FnMut(BinaryRule, String)) {
+    let Some(Ok(signature)) = &image.signature else {
+        return;
+    };
+    let Some(der) = signature.der_entitlements_decoded() else {
+        return;
+    };
+    let der = match der {
+        Ok(der) => der,
+        Err(error) => {
+            push(
+                BinaryRule::EntitlementsDiffer,
+                format!(
+                    "the DER entitlements cannot be read ({error}): iOS 15 and later read them"
+                ),
+            );
+            return;
+        }
+    };
+    let xml = signature
+        .entitlements
+        .as_ref()
+        .and_then(|entitlements| entitlements.plist.as_ref().ok())
+        .and_then(|plist| plist.root.as_dictionary());
+    match xml {
+        Some(xml) if !same_entitlements(&der.dictionary, xml) => {
+            let mut keys: Vec<&str> = der
+                .dictionary
+                .iter()
+                .map(|(key, _)| key)
+                .chain(xml.iter().map(|(key, _)| key))
+                .filter(|key| {
+                    let (left, right) = (der.dictionary.get(key), xml.get(key));
+                    match (left, right) {
+                        (Some(left), Some(right)) => {
+                            !same_entitlements(&single(key, left), &single(key, right))
+                        }
+                        _ => true,
+                    }
+                })
+                .collect();
+            keys.sort_unstable();
+            keys.dedup();
+            push(
+                BinaryRule::EntitlementsDiffer,
+                format!(
+                    "the DER entitlements (read by iOS 15 and later) differ from the XML ones in \
+                     {}",
+                    keys.join(", ")
+                ),
+            );
+        }
+        _ => {}
+    }
+}
+
+/// A one-key dictionary, to compare two values with the entitlements' own equality.
+fn single(key: &str, value: &Value) -> crate::plist::Dictionary {
+    let mut dictionary = crate::plist::Dictionary::default();
+    dictionary.insert_first(key.to_owned(), value.clone());
+    dictionary
 }
 
 /// What is wrong with who signed a slice: a CMS signature that does not verify (nothing else
