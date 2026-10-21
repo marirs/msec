@@ -61,6 +61,33 @@ self-signed:
   signature: verifies
   chain: not to the test root
   profile-signing extension: yes
+forged-apple-link:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+  chain: not to the test root
+  profile-signing extension: yes
+incomplete-apple-chain:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+  chain: not to the test root
+  profile-signing extension: yes
+apple-named-root:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+  chain: not to the test root
+  profile-signing extension: yes
 no-profile:
   get-task-allow: true
   profile: none

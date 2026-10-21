@@ -2,7 +2,7 @@
 //! APPCHK: a limitation is a check msec does not have; this is a check msec has that could not
 //! run on some part of this app). A rule fed by an unchecked part is incomplete, not clean.
 //!
-//! Five causes exist:
+//! Six causes exist:
 //! - the App Store encrypted an executable (FairPlay, `cryptid` set): its code pages cannot be
 //!   hashed, and the `__TEXT` sections msec reads (Objective-C method names, C strings) are
 //!   ciphertext. Load commands, imports and the code signature stay readable;
@@ -15,7 +15,11 @@
 //! - the distribution method is not established ([`super::distribution`]), so a check whose
 //!   verdict depends on it reaches none: `get-task-allow` (expected in a development build,
 //!   not in a distribution one), and the certificate against the method when a profile is
-//!   present but cannot be trusted.
+//!   present but cannot be trusted;
+//! - whether Apple issued the provisioning profile is not established (an incomplete chain, a
+//!   root named as Apple's that msec does not pin, an algorithm msec does not verify, no signer
+//!   certificate, a signer without the profile-signing extension observed on Apple's): the
+//!   profile is neither shown valid nor shown forged.
 //!
 //! The C strings of an encrypted executable feed the secret and tracker scans, which report
 //! the executable through [`crate::package_strings::Visitor::encrypted`]; they are listed here
@@ -61,6 +65,8 @@ pub enum UncheckedCheck {
     DebuggableBuild,
     /// The signing certificate against the distribution method.
     CertificateDistribution,
+    /// Whether Apple issued the provisioning profile.
+    ProfileIssuer,
 }
 
 impl UncheckedCheck {
@@ -90,6 +96,10 @@ impl UncheckedCheck {
             Self::PurposeStrings => vec![AppRule::PurposeStringMissing.key()],
             Self::DebuggableBuild => vec![BinaryRule::GetTaskAllow.key()],
             Self::CertificateDistribution => vec![AppRule::CertificateDistributionMismatch.key()],
+            Self::ProfileIssuer => vec![
+                AppRule::ProfileSignatureInvalid.key(),
+                AppRule::ProfileNotApple.key(),
+            ],
         }
     }
 }
@@ -107,6 +117,8 @@ pub enum UncheckedCause {
     PropertyListUnreadable,
     /// The distribution method is not established.
     DistributionUnknown,
+    /// Who issued the provisioning profile is not established.
+    IssuerNotEstablished,
 }
 
 /// Everything msec's checks could not examine in `app`: by executable, then slice, then
@@ -120,7 +132,31 @@ pub fn unchecked(app: &AppBundle) -> Vec<Unchecked> {
     unrecorded_build(app, &mut found);
     unread_purpose_strings(app, &mut found);
     unknown_distribution(app, &mut found);
+    unestablished_profile_issuer(app, &mut found);
     found
+}
+
+/// A profile that is neither shown to be Apple's nor shown not to be: its validity checks
+/// (AC-IOS-0013 in APPCHK) reach no verdict.
+fn unestablished_profile_issuer(app: &AppBundle, found: &mut Vec<Unchecked>) {
+    let (Some(path), Some(Ok(profile))) = (&app.provisioning_profile, &app.profile) else {
+        return;
+    };
+    if let Err(problem) = profile
+        .signature
+        .trusted(&super::profile::ProfileTrust::APPLE)
+        && !problem.proven()
+    {
+        found.push(Unchecked {
+            check: UncheckedCheck::ProfileIssuer,
+            cause: UncheckedCause::IssuerNotEstablished,
+            location: path.clone(),
+            architecture: None,
+            detail: format!(
+                "whether Apple issued the provisioning profile is not established: {problem}"
+            ),
+        });
+    }
 }
 
 /// Checks that need the distribution method, when it is not established: `get-task-allow`

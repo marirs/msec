@@ -395,7 +395,9 @@ fn binary_checks_report_what_they_find() {
 }
 
 /// The profile and ATS checks on the fixture and on the variants that embed another profile:
-/// the development profile, ATS off (NSAllowsArbitraryLoads alone), TLS 1.0 for example.com;
+/// the development profile, signed by msec's test CA and so shown not to be Apple's (its chain
+/// ends at a root that is not Apple's), ATS off (NSAllowsArbitraryLoads alone), TLS 1.0 for
+/// example.com;
 /// an expired profile; a profile for another app, whose application identifier the signature's
 /// entitlements do not match either.
 #[test]
@@ -411,6 +413,7 @@ fn app_checks_report_profile_and_ats() {
     assert_eq!(
         findings("fixture.ipa"),
         [
+            (AppRule::ProfileNotApple, None),
             (AppRule::ProfileDistribution, Some("development".into())),
             (AppRule::AtsArbitraryLoads, None),
             (AppRule::AtsWeakTlsDomain, Some("example.com".into())),

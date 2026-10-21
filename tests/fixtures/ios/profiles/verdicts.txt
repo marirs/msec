@@ -1,10 +1,13 @@
 ad-hoc: verified
 app-store: verified
+apple-named-root: verified
 developer-signed: verified
 development-ber: verified
 development: verified
 enterprise: verified
 expired: verified
+forged-apple-link: verified
+incomplete-apple-chain: verified
 no-keychain: verified
 not-signed: not verified
 other-bundle: verified

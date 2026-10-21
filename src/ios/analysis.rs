@@ -496,6 +496,10 @@ pub enum AppRule {
     ProfileUnreadable,
     /// The profile's CMS signature does not verify: it was changed after signing (msec).
     ProfileSignatureInvalid,
+    /// The profile is shown not to be Apple's: its signer's chain ends at someone else's root,
+    /// or a link is not signed by the certificate it names as issuer. iOS installs only
+    /// profiles Apple signed (msec).
+    ProfileNotApple,
     /// The profile has expired: iOS no longer launches the app (msec).
     ProfileExpired,
     /// The profile provisions a different bundle identifier (msec).
@@ -563,6 +567,7 @@ impl AppRule {
         match self {
             Self::ProfileUnreadable => "msec_ios_profile_unreadable",
             Self::ProfileSignatureInvalid => "msec_ios_profile_signature_invalid",
+            Self::ProfileNotApple => "msec_ios_profile_not_apple",
             Self::ProfileExpired => "msec_ios_profile_expired",
             Self::ProfileBundleMismatch => "msec_ios_profile_bundle_mismatch",
             Self::ProfileEntitlementsMismatch => "msec_ios_profile_entitlements_mismatch",
@@ -593,6 +598,7 @@ impl AppRule {
         match self {
             Self::ProfileUnreadable
             | Self::ProfileSignatureInvalid
+            | Self::ProfileNotApple
             | Self::ProfileExpired
             | Self::ProfileBundleMismatch
             | Self::ProfileEntitlementsMismatch
@@ -1076,11 +1082,24 @@ fn profile_checks(app: &AppBundle, today: &str, findings: &mut Vec<AppFinding>) 
             return;
         }
     };
-    if let Err(problem) = &profile.signature.verified {
+    // Only what is shown is a finding: a signature that fails over the content, a chain that
+    // fails or ends at someone else's root. What leaves Apple's authorship merely not
+    // established (an incomplete chain, an unpinned root named as Apple's, an algorithm msec
+    // does not verify, a signer without the undocumented profile-signing extension) is
+    // reported by `coverage::unchecked` instead.
+    if let Err(problem) = profile
+        .signature
+        .trusted(&super::profile::ProfileTrust::APPLE)
+        && problem.proven()
+    {
+        let rule = match problem {
+            super::profile::ProfileTrustProblem::NotVerified(_) => AppRule::ProfileSignatureInvalid,
+            _ => AppRule::ProfileNotApple,
+        };
         push(
-            AppRule::ProfileSignatureInvalid,
+            rule,
             None,
-            format!("the profile's CMS signature does not verify ({problem:?})"),
+            format!("the provisioning profile is not Apple's: {problem}"),
         );
     }
     if profile.expired(today) == Some(true) {

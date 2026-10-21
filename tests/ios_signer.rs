@@ -186,6 +186,21 @@ fn real_apple_signature() {
         msec::ios::distribution::of(app).kind(),
         Some(msec::ios::profile::ProfileKind::Development)
     );
+    // An Apple profile is neither a finding nor unchecked.
+    assert!(
+        !msec::ios::analysis::analyse_app(app, "2026-10-21")
+            .iter()
+            .any(|finding| matches!(
+                finding.rule,
+                msec::ios::analysis::AppRule::ProfileNotApple
+                    | msec::ios::analysis::AppRule::ProfileSignatureInvalid
+            ))
+    );
+    assert!(
+        msec::ios::coverage::unchecked(app)
+            .iter()
+            .all(|part| part.check != msec::ios::coverage::UncheckedCheck::ProfileIssuer)
+    );
     // An Xcode development build is signed "Apple Development" with a development profile:
     // the certificate fits, so nothing is reported.
     let mismatch = msec::ios::analysis::analyse_app(ipa.app.as_ref().unwrap(), "2026-10-21")

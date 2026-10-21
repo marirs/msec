@@ -92,19 +92,24 @@ pub struct ProfileSignature {
 
 /// Who must have issued a profile for its contents to be believed: its signer's chain must
 /// end at one of `roots` (SHA-256 fingerprints of self-signed certificates) with every link
-/// verifying, and the signer must carry `signer_extension`.
+/// verifying, and the signer must carry `signer_extension`. `organization` is the issuer's
+/// name in certificates (`O=`), which tells a root named as the issuer's but not pinned (a
+/// root msec may not know yet) from someone else's root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProfileTrust<'a> {
     /// The trusted roots' SHA-256 fingerprints (lower-case hex).
     pub roots: &'a [&'a str],
     /// The extension (OID) the signer certificate must carry.
     pub signer_extension: &'a str,
+    /// The issuer's organization name (`Apple Inc.`).
+    pub organization: &'a str,
 }
 
 /// Apple's provisioning-profile signing extension. Observed on the signer ("Apple iPhone OS
 /// Provisioning Profile Signing", issued by "Apple iPhone Certification Authority") of every
-/// Apple profile examined, and absent from developer certificates (which carry
-/// `1.2.840.113635.100.6.1.2` and `.12`, under WWDR); Apple does not document it.
+/// Apple profile examined (five), and absent from developer certificates (which carry
+/// `1.2.840.113635.100.6.1.2` and `.12`, under WWDR). Apple does not document it, so a signer
+/// without it leaves the profile's issuer not established rather than shown not to be Apple.
 pub const APPLE_PROFILE_SIGNING_EXTENSION: &str = "1.2.840.113635.100.6.58";
 
 impl ProfileTrust<'static> {
@@ -113,17 +118,29 @@ impl ProfileTrust<'static> {
     pub const APPLE: Self = Self {
         roots: &crate::macho::signer::APPLE_ROOTS,
         signer_extension: APPLE_PROFILE_SIGNING_EXTENSION,
+        organization: "Apple Inc.",
     };
 }
 
-/// Why a profile is not trusted.
+/// Why a profile is not trusted. Some problems show it was not issued by the trusted issuer
+/// ([`Self::proven`]); the others leave that open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProfileTrustProblem {
-    /// The signature does not verify over the content.
+    /// The signature cannot be checked or does not verify over the content.
     NotVerified(VerifyProblem),
-    /// The signer's chain does not end at a trusted root (`ending`: the last certificate's
-    /// name).
-    NotAnchored {
+    /// The chain ends at a self-signed root that is not trusted and is not named as the
+    /// issuer's: someone else's root.
+    ForeignRoot {
+        /// The root, by name.
+        root: String,
+    },
+    /// The chain ends at a self-signed root named as the issuer's that msec does not pin.
+    UnpinnedIssuerRoot {
+        /// The root, by name.
+        root: String,
+    },
+    /// The chain stops at a certificate whose issuer the signature does not carry.
+    IncompleteChain {
         /// The last certificate of the chain, by name.
         ending: String,
     },
@@ -135,11 +152,33 @@ pub enum ProfileTrustProblem {
         /// The algorithm or key is not one msec verifies.
         unsupported: bool,
     },
-    /// The chain is trusted, but the signer is not a profile-signing certificate.
+    /// The chain is trusted, but the signer lacks the issuer's profile-signing extension.
     NotProfileSigner {
         /// The signer, by name.
         signer: String,
     },
+}
+
+impl ProfileTrustProblem {
+    /// The profile is shown not to be the trusted issuer's: its signature does not verify over
+    /// its content (changed after signing), a link of its chain is not signed by the
+    /// certificate it names as issuer, or the chain ends at someone else's root. Otherwise
+    /// (no signer certificate, an algorithm msec does not verify, an incomplete chain, a root
+    /// named as the issuer's but not pinned, a signer without the observed extension) the
+    /// issuer is only not established.
+    pub fn proven(&self) -> bool {
+        match self {
+            Self::NotVerified(problem) => matches!(
+                problem,
+                VerifyProblem::SignatureInvalid | VerifyProblem::SignedAttributesDigestMismatch
+            ),
+            Self::ForeignRoot { .. } => true,
+            Self::LinkNotVerified { unsupported, .. } => !unsupported,
+            Self::UnpinnedIssuerRoot { .. }
+            | Self::IncompleteChain { .. }
+            | Self::NotProfileSigner { .. } => false,
+        }
+    }
 }
 
 impl std::fmt::Display for ProfileTrustProblem {
@@ -150,10 +189,20 @@ impl std::fmt::Display for ProfileTrustProblem {
                 "its signature does not verify ({})",
                 crate::macho::signer::SignerProblem::Verify(problem.clone())
             ),
-            Self::NotAnchored { ending } => write!(
+            Self::ForeignRoot { root } => write!(
                 formatter,
-                "its signer's certificate chain ends at {ending}, not at one of Apple's root \
-                 certificates"
+                "its signer's certificate chain ends at {root}, a root certificate that is not \
+                 Apple's"
+            ),
+            Self::UnpinnedIssuerRoot { root } => write!(
+                formatter,
+                "its signer's certificate chain ends at {root}, a root named as Apple's that \
+                 msec does not know"
+            ),
+            Self::IncompleteChain { ending } => write!(
+                formatter,
+                "its signer's certificate chain stops at {ending}, whose issuer the signature \
+                 does not carry"
             ),
             Self::LinkNotVerified {
                 at,
@@ -165,11 +214,15 @@ impl std::fmt::Display for ProfileTrustProblem {
             Self::LinkNotVerified {
                 at,
                 unsupported: false,
-            } => write!(formatter, "the issuer's signature on {at} does not verify"),
+            } => write!(
+                formatter,
+                "{at} is not signed by the certificate it names as its issuer"
+            ),
             Self::NotProfileSigner { signer } => write!(
                 formatter,
-                "it is signed by {signer}, which is not Apple's provisioning-profile signing \
-                 certificate (it lacks extension {APPLE_PROFILE_SIGNING_EXTENSION})"
+                "it is signed by {signer}, which lacks extension \
+                 {APPLE_PROFILE_SIGNING_EXTENSION}, observed on Apple's provisioning-profile \
+                 signing certificate"
             ),
         }
     }
@@ -190,24 +243,44 @@ impl ProfileSignature {
                 .unwrap_or_else(|| link.certificate.subject.clone())
         };
         let Some(last) = self.chain.last() else {
-            return Err(ProfileTrustProblem::NotAnchored {
+            return Err(ProfileTrustProblem::IncompleteChain {
                 ending: "no readable certificate".to_owned(),
             });
         };
-        let anchored = trust.roots.contains(&last.certificate.sha256.as_str())
-            && last.certificate.subject == last.certificate.issuer;
-        if !anchored {
-            return Err(ProfileTrustProblem::NotAnchored {
-                ending: named(last),
-            });
-        }
-        if let Some(link) = self.chain[..self.chain.len() - 1]
+        // A link whose issuer's signature fails is shown, whatever the chain ends at.
+        let links = &self.chain[..self.chain.len() - 1];
+        if let Some(link) = links
             .iter()
-            .find(|link| link.verified_by_next != Some(true))
+            .find(|link| link.verified_by_next == Some(false))
         {
             return Err(ProfileTrustProblem::LinkNotVerified {
                 at: named(link),
-                unsupported: link.verified_by_next.is_none(),
+                unsupported: false,
+            });
+        }
+        let self_signed = last.certificate.subject == last.certificate.issuer;
+        if !self_signed {
+            return Err(ProfileTrustProblem::IncompleteChain {
+                ending: named(last),
+            });
+        }
+        if !trust.roots.contains(&last.certificate.sha256.as_str()) {
+            let organization = format!("O={}", trust.organization);
+            let named_as_issuer = last
+                .certificate
+                .subject
+                .split(',')
+                .any(|part| part.trim() == organization);
+            return Err(if named_as_issuer {
+                ProfileTrustProblem::UnpinnedIssuerRoot { root: named(last) }
+            } else {
+                ProfileTrustProblem::ForeignRoot { root: named(last) }
+            });
+        }
+        if let Some(link) = links.iter().find(|link| link.verified_by_next.is_none()) {
+            return Err(ProfileTrustProblem::LinkNotVerified {
+                at: named(link),
+                unsupported: true,
             });
         }
         if !self

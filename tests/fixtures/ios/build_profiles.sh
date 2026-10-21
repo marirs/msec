@@ -10,13 +10,24 @@
 #   whole trust check. Two profiles stand for forgeries of a development profile:
 #   developer-signed.mobileprovision is signed by a certificate the test root issued without
 #   that extension (as a developer's own Apple-issued certificate would be), and
-#   self-signed.mobileprovision by a self-signed certificate that has it;
+#   self-signed.mobileprovision by a self-signed certificate that has it. Three more are
+#   built against Apple's own public CA certificates (apple/, below), as forgeries would be:
+#   forged-apple-link.mobileprovision is signed by a certificate named like Apple's profile
+#   signer and naming Apple's intermediate as its issuer, but issued by another key, and
+#   carries Apple's genuine intermediate and root (the chain is anchored at Apple, its first
+#   link fails); incomplete-apple-chain.mobileprovision is signed by the same certificate and
+#   carries nothing else (its issuer is missing); apple-named-root.mobileprovision is signed
+#   under a self-signed root named "Apple Root CA - G9" that Apple never issued;
 # - profiles/root.der: the test root, for tests to trust;
 # - profiles/<name>.content.plist: what Apple's `security cms -D` decodes from each;
 # - profiles/verdicts.txt: whether `openssl cms -verify -noverify` accepts each signature (the
 #   signature alone: the test chain is not trusted by anything);
 # - profiles/trust-verdicts.txt: whether `openssl cms -verify -CAfile root.pem` accepts each
-#   (the signer's chain to the test root), and whether the signer carries the extension.
+#   (the signer's chain to the test root), whether the signer carries the extension, and what
+#   `openssl cms -verify -CAfile apple/apple-root-ca.der` says of the chain to Apple's root.
+# apple/ holds Apple Root CA and Apple iPhone Certification Authority (DER), public CA
+# certificates taken from an Apple-issued provisioning profile (Apple also publishes them at
+# https://www.apple.com/certificateauthority/); no private key of Apple's is involved.
 # Needs OpenSSL 3 (OPENSSL, else Homebrew's openssl@3, else openssl on PATH: LibreSSL has no
 # cms command), macOS's security, and python3.
 set -eu
@@ -55,6 +66,37 @@ printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n
 "$openssl" req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=msec Development Certificate" \
   -keyout "$work/developer.key" -outform DER -out "$work/developer.der" 2> /dev/null
 
+# Forgeries against Apple's own CA certificates (see above).
+"$openssl" x509 -inform DER -in apple/apple-root-ca.der -out "$work/apple-root.pem"
+"$openssl" x509 -inform DER -in apple/apple-iphone-certification-authority.der \
+  -out "$work/apple-ca.pem"
+cat "$work/apple-ca.pem" "$work/apple-root.pem" > "$work/apple-chain.pem"
+# The forged CA copies the genuine intermediate's name and key identifier, so the forged signer
+# names Apple's intermediate as its issuer in both ways a verifier matches issuers by.
+apple_key_id=$("$openssl" x509 -in "$work/apple-ca.pem" -noout -ext subjectKeyIdentifier |
+  sed -n '2p' | tr -d ' ')
+"$openssl" req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -subj "/CN=Apple iPhone Certification Authority/OU=Certification Authority/O=Apple Inc./C=US" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "subjectKeyIdentifier=$apple_key_id" \
+  -keyout "$work/forged-ca.key" -out "$work/forged-ca.pem" 2> /dev/null
+"$openssl" req -newkey rsa:2048 -nodes \
+  -subj "/CN=Apple iPhone OS Provisioning Profile Signing/O=Apple Inc./C=US" \
+  -keyout "$work/forged-apple.key" -out "$work/forged-apple.csr" 2> /dev/null
+"$openssl" x509 -req -in "$work/forged-apple.csr" -CA "$work/forged-ca.pem" \
+  -CAkey "$work/forged-ca.key" -CAcreateserial -days 3650 -extfile "$work/profile-signer.ext" \
+  -out "$work/forged-apple.pem" 2> /dev/null
+"$openssl" req -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -subj "/CN=Apple Root CA - G9/OU=Apple Certification Authority/O=Apple Inc./C=US" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -keyout "$work/apple-named-root.key" -out "$work/apple-named-root.pem" 2> /dev/null
+"$openssl" req -newkey rsa:2048 -nodes \
+  -subj "/CN=Apple iPhone OS Provisioning Profile Signing/O=Apple Inc./C=US" \
+  -keyout "$work/apple-named-signer.key" -out "$work/apple-named-signer.csr" 2> /dev/null
+"$openssl" x509 -req -in "$work/apple-named-signer.csr" -CA "$work/apple-named-root.pem" \
+  -CAkey "$work/apple-named-root.key" -CAcreateserial -days 3650 \
+  -extfile "$work/profile-signer.ext" -out "$work/apple-named-signer.pem" 2> /dev/null
+
 rm -rf profiles
 mkdir profiles
 "$openssl" x509 -in "$work/root.pem" -outform DER -out profiles/root.der
@@ -67,9 +109,18 @@ sign() { # plist, output, extra flags...
 sign_as() { # signer, plist, output, extra flags...
   signer="$1" input="$2" output="$3"
   shift 3
+  sign_carrying "$work/root.pem" "$signer" "$input" "$output" "$@"
+}
+sign_carrying() { # certificates carried besides the signer's ("none"), signer, plist, output
+  carried="$1" signer="$2" input="$3" output="$4"
+  shift 4
+  if [ "$carried" = none ]; then
+    set -- "$@"
+  else
+    set -- -certfile "$carried" "$@"
+  fi
   "$openssl" cms -sign -nodetach -binary -outform DER -in "$input" \
-    -signer "$work/$signer.pem" -inkey "$work/$signer.key" -certfile "$work/root.pem" \
-    -md sha256 "$@" -out "$output"
+    -signer "$work/$signer.pem" -inkey "$work/$signer.key" -md sha256 "$@" -out "$output"
 }
 for plist in "$work"/plists/*.plist; do
   sign "$plist" "profiles/$(basename "$plist" .plist).mobileprovision"
@@ -78,6 +129,12 @@ sign "$work/plists/development.plist" profiles/development-ber.mobileprovision -
 sign_as developer-signer "$work/plists/development.plist" \
   profiles/developer-signed.mobileprovision
 sign_as self-signer "$work/plists/development.plist" profiles/self-signed.mobileprovision
+sign_carrying "$work/apple-chain.pem" forged-apple "$work/plists/development.plist" \
+  profiles/forged-apple-link.mobileprovision
+sign_carrying none forged-apple "$work/plists/development.plist" \
+  profiles/incomplete-apple-chain.mobileprovision
+sign_carrying "$work/apple-named-root.pem" apple-named-signer "$work/plists/development.plist" \
+  profiles/apple-named-root.mobileprovision
 python3 -I - profiles/development.mobileprovision profiles/tampered.mobileprovision <<'PY'
 import sys
 data = bytearray(open(sys.argv[1], "rb").read())
@@ -115,5 +172,12 @@ for profile in profiles/*.mobileprovision; do
   else
     extension="no profile-signing extension"
   fi
-  echo "$name: $chain; $extension"
+  apple=$("$openssl" cms -verify -binary -inform DER -in "$profile" \
+    -CAfile "$work/apple-root.pem" -purpose any -out /dev/null 2>&1 |
+    grep -o "Verify error: .*" | head -n 1 | sed 's/Verify error: //')
+  if [ -z "$apple" ] && "$openssl" cms -verify -binary -inform DER -in "$profile" \
+    -CAfile "$work/apple-root.pem" -purpose any -out /dev/null > /dev/null 2>&1; then
+    apple="verifies"
+  fi
+  echo "$name: $chain; $extension; to Apple's root: ${apple:-signature does not verify}"
 done > profiles/trust-verdicts.txt

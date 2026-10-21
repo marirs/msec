@@ -10,6 +10,9 @@
 # - distribution-developer-signed.ipa, distribution-self-signed.ipa: a development profile
 #   signed by a certificate without the profile-signing extension, and by a self-signed one
 #   (forgeries: their signatures verify);
+# - distribution-forged-apple-link.ipa, distribution-incomplete-apple-chain.ipa,
+#   distribution-apple-named-root.ipa: the forgeries built against Apple's CA certificates
+#   (build_profiles.sh);
 # - distribution-no-profile.ipa: no profile at all.
 # distribution-verdicts.txt, per variant: get-task-allow as codesign reads the entitlements;
 # the profile's ProvisionsAllDevices, number of ProvisionedDevices and get-task-allow as
@@ -97,5 +100,8 @@ variant app-store app-store
 variant tampered-profile tampered
 variant developer-signed developer-signed
 variant self-signed self-signed
+variant forged-apple-link forged-apple-link
+variant incomplete-apple-chain incomplete-apple-chain
+variant apple-named-root apple-named-root
 variant no-profile none
 cp "$work/verdicts.txt" distribution-verdicts.txt
