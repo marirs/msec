@@ -13,6 +13,7 @@ use msec::archive::{Limits, ZipArchive};
 use msec::ios::Ipa;
 use msec::ios::analysis::{AppRule, analyse_app};
 use msec::ios::purpose_strings::{REQUIREMENTS, Signal, entitlement_uses};
+use msec::plist::{Value, to_xml};
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ios");
 
@@ -138,7 +139,13 @@ fn missing_purpose_strings_tracking_and_upload_requirements_are_reported() {
     assert_eq!(
         summary,
         [
-            // The camera's purpose string is present: no finding.
+            // The camera's purpose string is present in Info.plist and German; French blanks
+            // it.
+            (
+                AppRule::PurposeStringMissing,
+                "fr.lproj/InfoPlist.strings",
+                "NSCameraUsageDescription"
+            ),
             (
                 AppRule::PurposeStringMissing,
                 "Info.plist",
@@ -167,6 +174,11 @@ fn missing_purpose_strings_tracking_and_upload_requirements_are_reported() {
             (
                 AppRule::PurposeStringMissing,
                 "PlugIns/Share.appex/Info.plist",
+                "NSSpeechRecognitionUsageDescription"
+            ),
+            (
+                AppRule::PurposeStringMissing,
+                "PlugIns/Share.appex/fr.lproj/InfoPlist.strings",
                 "NSSpeechRecognitionUsageDescription"
             ),
             (AppRule::TrackingWithoutAtt, "PrivacyInfo.xcprivacy", ""),
@@ -208,8 +220,15 @@ fn missing_purpose_strings_tracking_and_upload_requirements_are_reported() {
          Fixture uses motion and fitness data (import _OBJC_CLASS_$_CMPedometer)",
         "Info.plist has no NSHealthShareUsageDescription (or NSHealthUpdateUsageDescription); \
          Fixture uses health data (entitlement com.apple.developer.healthkit)",
-        "Info.plist has no NSBluetoothAlwaysUsageDescription; Frameworks/Lib.framework/Lib uses \
-         Bluetooth (import _OBJC_CLASS_$_CBCentralManager)",
+        "NSBluetoothAlwaysUsageDescription is 4,000 bytes: a purpose string must be shorter \
+         than 4,000 bytes; Frameworks/Lib.framework/Lib uses Bluetooth (import \
+         _OBJC_CLASS_$_CBCentralManager)",
+        "NSCameraUsageDescription is empty: a purpose string must say why the app needs the \
+         camera in the fr localization; Fixture uses the camera (import \
+         _OBJC_CLASS_$_AVCaptureDevice, import _AVMediaTypeVideo)",
+        "NSSpeechRecognitionUsageDescription is not a string (array): iOS has no purpose string \
+         to show in the fr localization; PlugIns/Share.appex/Share uses speech recognition \
+         (import _OBJC_CLASS_$_SFSpeechRecognizer)",
     ] {
         assert!(
             details.iter().any(|detail| detail == expected),
@@ -262,6 +281,36 @@ fn unread_or_unrecorded_info_is_unchecked() {
     let ipa = read_ipa("store.ipa");
     let mut app = ipa.app.clone().unwrap();
     assert!(unchecked(&app).is_empty());
+    // A localization that could not be read leaves its purpose strings unchecked.
+    let mut unread_localization = app.clone();
+    let french = unread_localization
+        .localized_info
+        .iter_mut()
+        .find(|localized| {
+            localized
+                .path
+                .ends_with("Fixture.app/fr.lproj/InfoPlist.strings")
+        })
+        .unwrap();
+    french.strings = Err("invalid OpenStep plist".to_owned());
+    let parts: Vec<(UncheckedCheck, String)> = unchecked(&unread_localization)
+        .into_iter()
+        .map(|part| {
+            (
+                part.check,
+                part.location
+                    .trim_start_matches(app.path.as_str())
+                    .to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        parts,
+        [(
+            UncheckedCheck::PurposeStrings,
+            "fr.lproj/InfoPlist.strings".to_owned()
+        )]
+    );
     app.info = None;
     let parts: Vec<(UncheckedCheck, UncheckedCause, String)> = unchecked(&app)
         .into_iter()
@@ -304,4 +353,49 @@ fn unread_or_unrecorded_info_is_unchecked() {
                 .to_owned()
         )]
     );
+}
+
+/// Each app and extension InfoPlist.strings reads as plutil reads it, whether text (UTF-16 or
+/// UTF-8) or a binary plist; a framework's is left out (frameworks hold no purpose strings).
+#[test]
+fn localized_info_reads_as_plutil_reads_it() {
+    let ipa = read_ipa("store.ipa");
+    let app = ipa.app.as_ref().unwrap();
+    // store-localized.txt: "== <path>" then plutil -convert xml1's output.
+    let text = std::fs::read_to_string(Path::new(FIXTURES).join("store-localized.txt")).unwrap();
+    let mut oracle: BTreeMap<String, String> = BTreeMap::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        if let Some(path) = line.strip_prefix("== ") {
+            current = path.to_owned();
+            oracle.insert(current.clone(), String::new());
+        } else {
+            let xml = oracle.get_mut(&current).unwrap();
+            xml.push_str(line);
+            xml.push('\n');
+        }
+    }
+    assert_eq!(oracle.len(), 4);
+    let read: BTreeMap<String, String> = app
+        .localized_info
+        .iter()
+        .map(|localized| {
+            let strings = localized.strings.clone().unwrap();
+            (
+                localized
+                    .path
+                    .trim_start_matches(app.path.as_str())
+                    .to_owned(),
+                to_xml(&Value::Dictionary(strings)).unwrap(),
+            )
+        })
+        .collect();
+    let expected: BTreeMap<String, String> = oracle
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("Frameworks/"))
+        .collect();
+    assert_eq!(read, expected);
+    assert!(app.localized_info.iter().any(|localized| {
+        localized.bundle.ends_with("PlugIns/Share.appex/") && localized.language == "fr"
+    }));
 }

@@ -5,15 +5,21 @@
 # - its main executable uses contacts (no purpose string), location while in use (a blank
 #   one), the camera (a valid one) and motion data (an integer instead of a string); its
 #   entitlements grant HealthKit, without either health purpose string;
-# - Lib.framework uses Bluetooth, whose purpose string the app's Info.plist lacks;
+# - Lib.framework uses Bluetooth, whose purpose string in the app's Info.plist is 4,000 bytes
+#   (Apple requires fewer);
 # - PlugIns/Share.appex uses speech recognition: the app's Info.plist has that purpose string,
 #   the extension's own does not;
+# - localizations: the app's fr.lproj/InfoPlist.strings (UTF-16 text, as non-Xcode toolchains
+#   ship it) sets a blank camera purpose string, its de.lproj one (a binary plist, as Xcode
+#   writes it) a valid one; the extension's fr.lproj one (UTF-8 text) gives the speech key an
+#   array; the framework's fr.lproj one, which iOS does not use for purpose strings, a blank
+#   camera string;
 # - the privacy manifest declares tracking and nothing references ATTrackingManager;
 # - Info.plist records the iOS 25.2 SDK and MinimumOSVersion 12.0 (the code itself is compiled
 #   for iOS 17: current SDKs do not target iOS 12), as a build made before 2026 would.
 # store-verdicts.txt: per executable, the symbols nm -u lists and the Objective-C selectors
 # otool finds that a purpose-string requirement names, and codesign's reading of the
-# entitlements.
+# entitlements; store-localized.txt: plutil's reading of each InfoPlist.strings.
 # Needs macOS with Xcode (an iOS SDK) and python3.
 set -eu
 cd "$(dirname "$0")"
@@ -40,6 +46,7 @@ write(app / "Info.plist", {**common, "CFBundleIdentifier": "dev.appchk.store",
       "NSCameraUsageDescription": "Scans documents you choose to add.",
       "NSLocationWhenInUseUsageDescription": "  ",
       "NSMotionUsageDescription": 1,
+      "NSBluetoothAlwaysUsageDescription": "Connects to your heart-rate strap. " * 114 + "x" * 10,
       "NSSpeechRecognitionUsageDescription": "Turns your dictation into notes."})
 write(app / "Frameworks/Lib.framework/Info.plist", {**common,
       "CFBundleIdentifier": "dev.appchk.store.lib", "CFBundleExecutable": "Lib",
@@ -57,6 +64,23 @@ $cc -framework Foundation -framework Speech -o "$app/PlugIns/Share.appex/Share" 
 $cc -framework Foundation -framework AVFoundation -framework Contacts -framework CoreLocation \
   -framework CoreMotion -Wl,-rpath,@executable_path/Frameworks -o "$app/Fixture" store/main.m
 cp store/PrivacyInfo.xcprivacy "$app/PrivacyInfo.xcprivacy"
+mkdir -p "$app/fr.lproj" "$app/de.lproj" "$app/PlugIns/Share.appex/fr.lproj" \
+  "$app/Frameworks/Lib.framework/fr.lproj"
+python3 -I - "$app" <<'PY'
+import sys
+from pathlib import Path
+app = Path(sys.argv[1])
+(app / "fr.lproj/InfoPlist.strings").write_bytes(
+    "\ufeff/* Fran\u00e7ais */\n\"CFBundleDisplayName\" = \"Boutique\";\n"
+    "\"NSCameraUsageDescription\" = \"  \";\n".encode("utf-16-le"))
+(app / "PlugIns/Share.appex/fr.lproj/InfoPlist.strings").write_text(
+    'NSSpeechRecognitionUsageDescription = ("dictée");\n', encoding="utf-8")
+(app / "Frameworks/Lib.framework/fr.lproj/InfoPlist.strings").write_text(
+    '"NSCameraUsageDescription" = "";\n', encoding="utf-8")
+PY
+printf '"NSCameraUsageDescription" = "Scannt die Dokumente, die Sie wählen.";\n' \
+  > "$work/de.strings"
+plutil -convert binary1 -o "$app/de.lproj/InfoPlist.strings" "$work/de.strings"
 codesign -s - -f --timestamp=none "$app/Frameworks/Lib.framework" > /dev/null 2>&1
 codesign -s - -f --timestamp=none "$app/PlugIns/Share.appex" > /dev/null 2>&1
 codesign -s - -f --timestamp=none --entitlements store/entitlements.plist "$app" > /dev/null 2>&1
@@ -84,3 +108,9 @@ for key, value in sorted(json.loads(text).items() if text.strip() else []):
 
   done
 } > store-verdicts.txt
+# plutil's reading of each InfoPlist.strings, by path in the app: a "== path" line, then
+# what plutil -convert xml1 writes.
+(cd "$app" && find . -name InfoPlist.strings | sort | while read -r file; do
+  echo "== ${file#./}"
+  plutil -convert xml1 -o - "$file"
+done) > store-localized.txt

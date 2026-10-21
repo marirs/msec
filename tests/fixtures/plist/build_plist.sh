@@ -1,7 +1,7 @@
 #!/bin/sh
 # Rebuilds the plist fixtures and Apple's view of them:
-# - xml/*.xml and binary/*.bplist: from make_plist_fixtures.py, one rule of Core Foundation's
-#   readers per file;
+# - xml/*.xml, binary/*.bplist and openstep/*.strings: from make_plist_fixtures.py, one rule of
+#   Core Foundation's readers per file;
 # - binary/info.bplist and binary/types.bplist: plutil's binary conversion of xml/info.xml and
 #   xml/types.xml, the format Xcode writes Info.plist in;
 # - verdicts.txt: whether plutil (Core Foundation) reads each file, and its error when not;
@@ -11,12 +11,12 @@
 # Needs macOS (plutil) and python3. Run from anywhere.
 set -eu
 cd "$(dirname "$0")"
-rm -rf xml binary expected
+rm -rf xml binary openstep expected
 python3 -I make_plist_fixtures.py .
 plutil -convert binary1 -o binary/info.bplist xml/info.xml
 plutil -convert binary1 -o binary/types.bplist xml/types.xml
 mkdir expected
-for file in xml/*.xml binary/*.bplist; do
+for file in xml/*.xml binary/*.bplist openstep/*.strings; do
   if plutil -lint "$file" > /dev/null 2>&1; then
     echo "$file: accepted"
     case "$file" in */depth-*) continue ;; esac

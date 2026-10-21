@@ -108,3 +108,59 @@ binary/url-marker.bplist: rejected: (Unexpected character b at line 1)
 binary/utf8-string-marker.bplist: rejected: (Unexpected character b at line 1)
 binary/version-0x.bplist: accepted
 binary/version-10.bplist: rejected: (Unexpected character b at line 1)
+openstep/array-missing-comma.strings: rejected: (Unexpected character " at line 1)
+openstep/arrays.strings: accepted
+openstep/comment-only.strings: accepted
+openstep/comments.strings: accepted
+openstep/concatenated-strings.strings: rejected: (Unexpected character " at line 1)
+openstep/data-invalid.strings: rejected: (Unexpected character " at line 1)
+openstep/data-odd.strings: rejected: (Unexpected character " at line 1)
+openstep/data.strings: accepted
+openstep/depth-arrays-513.strings: accepted
+openstep/depth-arrays-514.strings: rejected: (Unexpected character ( at line 1)
+openstep/depth-strings-512.strings: accepted
+openstep/depth-strings-513.strings: rejected: (Unexpected character " at line 1)
+openstep/dictionaries.strings: accepted
+openstep/dictionary-missing-semicolon.strings: rejected: (Unexpected character " at line 1)
+openstep/double-semicolon.strings: accepted
+openstep/duplicate-key.strings: accepted
+openstep/escaped-newline.strings: accepted
+openstep/escapes.strings: accepted
+openstep/info-plist-strings.strings: accepted
+openstep/json.strings: rejected: (Unexpected character { at line 1)
+openstep/key-only-last.strings: accepted
+openstep/key-only.strings: accepted
+openstep/latin1.strings: rejected: (Unexpected character " at line 1)
+openstep/leading-semicolon.strings: rejected: (Unexpected character ; at line 1)
+openstep/missing-equals.strings: rejected: (Unexpected character " at line 1)
+openstep/missing-key.strings: rejected: (Unexpected character = at line 1)
+openstep/missing-semicolon.strings: rejected: (Unexpected character " at line 1)
+openstep/missing-value.strings: rejected: (Unexpected character a at line 1)
+openstep/octal-376.strings: rejected: (Unexpected character " at line 1)
+openstep/octal-377.strings: rejected: (Unexpected character " at line 1)
+openstep/octal-all.strings: accepted
+openstep/octal-wraps.strings: rejected: (Unexpected character " at line 1)
+openstep/octal.strings: accepted
+openstep/quoted-non-ascii.strings: accepted
+openstep/raw-newline.strings: accepted
+openstep/single-quotes.strings: accepted
+openstep/top-array-junk.strings: rejected: (Unexpected character ( at line 1)
+openstep/top-array.strings: accepted
+openstep/top-dictionary-junk.strings: rejected: (Unexpected character { at line 1)
+openstep/top-dictionary.strings: accepted
+openstep/top-string.strings: accepted
+openstep/trailing-word.strings: rejected: (Unexpected character " at line 1)
+openstep/unicode-escape-empty.strings: rejected: (Unexpected character " at line 1)
+openstep/unicode-escapes.strings: accepted
+openstep/unicode-lone-surrogate.strings: accepted
+openstep/unquoted-non-ascii.strings: rejected: (Unexpected character Ð at line 1)
+openstep/unquoted-plus.strings: rejected: (Unexpected character a at line 1)
+openstep/unquoted.strings: accepted
+openstep/unterminated-comment.strings: accepted
+openstep/unterminated-string.strings: rejected: (Unexpected character " at line 1)
+openstep/utf16-no-bom.strings: rejected: (Unexpected character a at line 1)
+openstep/utf16-odd-length.strings: accepted
+openstep/utf16be.strings: accepted
+openstep/utf16le.strings: accepted
+openstep/utf8-bom.strings: accepted
+openstep/whitespace-only.strings: accepted

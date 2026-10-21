@@ -404,6 +404,79 @@ XML = {
 }
 
 
+def strings_depth(levels):
+    """A .strings entry whose value nests `levels` arrays (the file's dictionary is level 1)."""
+    return '"k" = ' + "(" * levels + ")" * levels + ";"
+
+
+# Old-style OpenStep text and .strings files, one rule of Core Foundation's reader per file.
+OPENSTEP = {
+    # A realistic InfoPlist.strings, as other toolchains than Xcode ship it.
+    "info-plist-strings.strings": '/* Localized versions of Info.plist keys */\n'
+    '"CFBundleDisplayName" = "Fixture";\n'
+    '"NSCameraUsageDescription" = "Scans the documents you choose.";\n',
+    "comments.strings": '/* block */ "a" /* inside */ = /* inside */ "b" // line\n;\n// end',
+    "comment-only.strings": "/* only a comment */\n",
+    "whitespace-only.strings": "   \n\t \u2028 ",
+    "unterminated-comment.strings": '"a" = "b";\n/* never closed',
+    "unquoted.strings": "a.b-c/d:e$f_g = v1;\nkey=value;\n1 = 2;",
+    "unquoted-plus.strings": "a+b = v;",
+    "unquoted-non-ascii.strings": "ключ = v;",
+    "quoted-non-ascii.strings": '"ключ" = "значение";',
+    "single-quotes.strings": "'a' = 'b \"c\"';",
+    "key-only.strings": '"a";\n"b" = "c";',
+    "key-only-last.strings": '"a"',
+    "duplicate-key.strings": '"a" = "first";\n"a" = "second";',
+    "missing-semicolon.strings": '"a" = "b"',
+    "missing-equals.strings": '"a" "b";',
+    "missing-value.strings": "a = ;",
+    "missing-key.strings": '= "v";',
+    "leading-semicolon.strings": ';"a" = "b";',
+    "double-semicolon.strings": '"a" = "b";;',
+    "trailing-word.strings": '"a" = "b"; trailing',
+    "concatenated-strings.strings": '"a" = "b" "c";',
+    "unterminated-string.strings": '"a" = "b;',
+    "escapes.strings": '"a" = "\\a\\b\\f\\n\\r\\t\\v\\"\\\'\\\\\\q\\x41\\u00e9";',
+    "escaped-newline.strings": '"a" = "x\\\ny";',
+    "raw-newline.strings": '"a" = "line1\nline2";',
+    "octal.strings": '"a" = "\\101\\0101\\1\\12x\\200\\375";',
+    "octal-all.strings": '"a" = "' + "".join("\\%o" % byte for byte in range(0x80, 0xFE)) + '";',
+    "octal-376.strings": '"a" = "\\376";',
+    "octal-377.strings": '"a" = "\\377";',
+    "octal-wraps.strings": '"a" = "\\777";',
+    "unicode-escapes.strings": '"a" = "\\U00e9\\U4\\U00410\\UD83D\\UDE00";',
+    "unicode-escape-empty.strings": '"a" = "\\Uzz";',
+    "unicode-lone-surrogate.strings": '"a" = "\\UD83D";',
+    "arrays.strings": '"a" = (x, "y", (z), );\n"b" = ();',
+    "array-missing-comma.strings": '"a" = ("x" "y");',
+    "dictionaries.strings": '"a" = { b = c; "d" = { e = (f); }; };\n"g" = {};',
+    "dictionary-missing-semicolon.strings": '"a" = { b = c };',
+    "data.strings": '"a" = <0102 abCD\n ef>;\n"b" = <>;',
+    "data-odd.strings": '"a" = <012>;',
+    "data-invalid.strings": '"a" = <01zz>;',
+    "top-dictionary.strings": "{ a = b; c = (d, e); }",
+    "top-array.strings": '(a, "b", <01>)',
+    "top-string.strings": '"just a string"',
+    "top-dictionary-junk.strings": "{ a = b; } c",
+    "top-array-junk.strings": "(a) b",
+    "json.strings": '{"a": "b"}',
+    "depth-strings-512.strings": strings_depth(512),
+    "depth-strings-513.strings": strings_depth(513),
+    "depth-arrays-513.strings": "(" * 513 + ")" * 513,
+    "depth-arrays-514.strings": "(" * 514 + ")" * 514,
+}
+
+# Encodings, written as bytes.
+OPENSTEP_BYTES = {
+    "utf8-bom.strings": b'\xef\xbb\xbf"a" = "b";',
+    "utf16le.strings": "\ufeff\"a\" = \"v\u00e4lue\";".encode("utf-16-le"),
+    "utf16be.strings": "\ufeff\"a\" = \"v\u00e4lue\";".encode("utf-16-be"),
+    "utf16-no-bom.strings": '"a" = "b";'.encode("utf-16-le"),
+    "utf16-odd-length.strings": "\ufeff\"a\" = \"b\";".encode("utf-16-le") + b"\x00",
+    "latin1.strings": b'"a" = "\xe9";',
+}
+
+
 def main():
     out = Path(sys.argv[1])
     (out / "binary").mkdir(parents=True, exist_ok=True)
@@ -420,6 +493,11 @@ def main():
         '<?xml version="1.0" encoding="UTF-16"?><plist><string>x</string></plist>'.encode("utf-16"))
     (out / "xml" / "shift-jis.xml").write_bytes(
         b'<?xml version="1.0" encoding="Shift_JIS"?><plist><string>x</string></plist>')
+    (out / "openstep").mkdir(parents=True, exist_ok=True)
+    for name, text in OPENSTEP.items():
+        (out / "openstep" / name).write_bytes(text.encode("utf-8"))
+    for name, data in OPENSTEP_BYTES.items():
+        (out / "openstep" / name).write_bytes(data)
 
 
 if __name__ == "__main__":

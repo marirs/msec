@@ -19,13 +19,17 @@
 //! `plutil`'s verdicts are under `tests/fixtures/plist/`. [`to_xml`] writes a value the way
 //! `plutil -convert xml1` does, which is how the tests compare msec's reading with Apple's.
 //!
-//! Not read: the old OpenStep text format and JSON ([`PlistError::Unsupported`]), XML in
-//! encodings other than UTF-8, UTF-16 and ISO-8859-1 ([`PlistError::UnsupportedEncoding`]), and
-//! binary plists of format version 1x. MobSF converts plists with Python's `plistlib`, which
+//! The old OpenStep text format, and `.strings` files in it, are read too (`openstep`), as
+//! iOS reads an app's `InfoPlist.strings` when it is text.
+//!
+//! Not read: JSON, which Core Foundation does not read as a property list either
+//! ([`PlistError::InvalidOpenStep`]), XML in encodings other than UTF-8, UTF-16 and ISO-8859-1
+//! ([`PlistError::UnsupportedEncoding`]), and binary plists of format version 1x. MobSF converts plists with Python's `plistlib`, which
 //! resolves duplicate keys the same way for both formats; see `docs/PORTING.md`.
 
 mod binary;
 pub(crate) mod date;
+mod openstep;
 mod render;
 mod xml;
 
@@ -173,7 +177,8 @@ impl Dictionary {
     }
 
     /// Adds a key the way Core Foundation's parser for `format` does: a binary plist keeps the
-    /// first value, an XML one the last. Returns false when the key was already there.
+    /// first value, an XML or OpenStep one the last. Returns false when the key was already
+    /// there.
     fn insert(&mut self, key: String, value: Value, format: Format) -> bool {
         match self
             .entries
@@ -185,7 +190,7 @@ impl Dictionary {
                 true
             }
             Some(entry) => {
-                if format == Format::Xml {
+                if format != Format::Binary {
                     entry.1 = value;
                 }
                 false
@@ -201,6 +206,8 @@ pub enum Format {
     Binary,
     /// XML.
     Xml,
+    /// Old-style OpenStep text, including `.strings` files.
+    OpenStep,
 }
 
 /// Something in a plist Core Foundation accepts but that deserves attention.
@@ -232,7 +239,7 @@ pub enum Anomaly {
 /// Why a plist could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlistError {
-    /// Not a format msec reads: empty input, OpenStep text, JSON, or binary format 1x.
+    /// Not a format msec reads: empty input, or binary format 1x.
     Unsupported(&'static str),
     /// XML declared in an encoding other than UTF-8, UTF-16 and ISO-8859-1.
     UnsupportedEncoding(String),
@@ -250,6 +257,13 @@ pub enum PlistError {
         /// What is wrong.
         reason: String,
     },
+    /// The OpenStep text is not a well-formed plist at `offset`.
+    InvalidOpenStep {
+        /// Offset in the decoded text, in UTF-16 code units.
+        offset: usize,
+        /// What is wrong.
+        reason: String,
+    },
     /// Nested deeper than Core Foundation accepts.
     TooDeep,
     /// Objects shared by several containers expand past msec's budget. Core Foundation shares
@@ -263,7 +277,10 @@ impl PlistError {
     /// Foundation reads what msec does not.
     pub fn rejected_by_core_foundation(&self) -> bool {
         match self {
-            Self::InvalidBinary { .. } | Self::InvalidXml { .. } | Self::TooDeep => true,
+            Self::InvalidBinary { .. }
+            | Self::InvalidXml { .. }
+            | Self::InvalidOpenStep { .. }
+            | Self::TooDeep => true,
             Self::Unsupported(_)
             | Self::UnsupportedEncoding(_)
             | Self::ExpansionBudgetExhausted => false,
@@ -283,6 +300,12 @@ impl fmt::Display for PlistError {
             }
             Self::InvalidXml { offset, reason } => {
                 write!(formatter, "invalid XML plist at byte {offset}: {reason}")
+            }
+            Self::InvalidOpenStep { offset, reason } => {
+                write!(
+                    formatter,
+                    "invalid OpenStep plist at character {offset}: {reason}"
+                )
             }
             Self::TooDeep => formatter.write_str("nested deeper than Core Foundation accepts"),
             Self::ExpansionBudgetExhausted => {
@@ -305,10 +328,13 @@ pub struct Plist {
     pub anomalies: Vec<Anomaly>,
 }
 
-/// Reads a binary or XML plist.
+/// Reads a binary, XML or OpenStep plist (or `.strings` file).
 pub fn parse(bytes: &[u8]) -> Result<Plist, PlistError> {
     if bytes.starts_with(b"bplist") {
         return binary::parse(bytes);
+    }
+    if openstep::is_openstep(bytes) {
+        return openstep::parse(bytes);
     }
     xml::parse(bytes)
 }

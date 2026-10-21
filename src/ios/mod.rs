@@ -24,5 +24,5 @@ pub mod upload_requirements;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
 pub use info::{BundleInfo, WrongType};
-pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem};
+pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem, LocalizedInfo};
 pub use privacy::{AccessedApiType, CollectedDataType, PrivacyManifest};

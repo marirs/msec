@@ -669,7 +669,7 @@ pub(super) fn purpose_bundle<'app>(
 /// bundle and resource, naming the first executable seen using it. A bundle whose
 /// `Info.plist` was not read is not judged.
 fn purpose_string_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
-    use super::purpose_strings::{entitlement_uses, purpose_problem};
+    use super::purpose_strings::{entitlement_uses, localized_problems, purpose_problem};
     use std::collections::BTreeMap;
 
     let mut used: BTreeMap<(&str, usize), (String, String, usize)> = BTreeMap::new();
@@ -695,29 +695,46 @@ fn purpose_string_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
         }
     }
     for ((directory, requirement), (binary, evidence, others)) in used {
-        let Some(info) = purpose_bundle(app, directory).1 else {
-            continue;
-        };
         let requirement = &super::purpose_strings::REQUIREMENTS[requirement];
-        let Some(problem) =
-            purpose_problem(requirement, &info.usage_descriptions, &info.wrong_types)
-        else {
-            continue;
-        };
         let more = match others {
             0 => String::new(),
             1 => " (and 1 more executable)".to_owned(),
             count => format!(" (and {count} more executables)"),
         };
-        findings.push(AppFinding {
-            rule: AppRule::PurposeStringMissing,
-            location: format!("{directory}Info.plist"),
-            subject: Some(requirement.keys[0].to_owned()),
-            detail: format!(
-                "{problem}; {binary}{more} uses {} ({evidence})",
-                requirement.resource
-            ),
-        });
+        let user = format!("{binary}{more} uses {} ({evidence})", requirement.resource);
+        if let Some(info) = purpose_bundle(app, directory).1
+            && let Some(problem) =
+                purpose_problem(requirement, &info.usage_descriptions, &info.wrong_types)
+        {
+            findings.push(AppFinding {
+                rule: AppRule::PurposeStringMissing,
+                location: format!("{directory}Info.plist"),
+                subject: Some(requirement.keys[0].to_owned()),
+                detail: format!("{problem}; {user}"),
+            });
+        }
+        // Each localization of this bundle that sets one of the keys must set a usable text:
+        // iOS shows it instead of Info.plist's in that language.
+        for localized in app
+            .localized_info
+            .iter()
+            .filter(|localized| localized.bundle == directory)
+        {
+            let Ok(strings) = &localized.strings else {
+                continue;
+            };
+            for (key, problem) in localized_problems(requirement, strings) {
+                findings.push(AppFinding {
+                    rule: AppRule::PurposeStringMissing,
+                    location: localized.path.clone(),
+                    subject: Some(key.to_owned()),
+                    detail: format!(
+                        "{problem} in the {} localization; {user}",
+                        localized.language
+                    ),
+                });
+            }
+        }
     }
 }
 

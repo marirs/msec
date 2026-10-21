@@ -109,8 +109,8 @@ pub fn unchecked(app: &AppBundle) -> Vec<Unchecked> {
     found
 }
 
-/// Bundles whose code uses a protected resource but whose `Info.plist` was not read: their
-/// purpose strings were not checked.
+/// Bundles whose code uses a protected resource but whose `Info.plist`, or one of whose
+/// `InfoPlist.strings`, was not read: those purpose strings were not checked.
 fn unread_purpose_strings(app: &AppBundle, found: &mut Vec<Unchecked>) {
     let mut reported: Vec<&str> = Vec::new();
     for binary in &app.binaries {
@@ -126,24 +126,45 @@ fn unread_purpose_strings(app: &AppBundle, found: &mut Vec<Unchecked>) {
             continue;
         }
         let (directory, info) = super::analysis::purpose_bundle(app, &binary.path);
-        if info.is_some() || reported.contains(&directory) {
+        if reported.contains(&directory) {
             continue;
         }
         reported.push(directory);
-        found.push(Unchecked {
-            check: UncheckedCheck::PurposeStrings,
-            cause: UncheckedCause::PropertyListUnreadable,
-            location: format!("{directory}Info.plist"),
-            architecture: None,
-            detail: format!(
-                "{} uses protected resources, but this Info.plist was not read: its purpose \
-                 strings were not checked",
-                binary
-                    .path
-                    .strip_prefix(app.path.as_str())
-                    .unwrap_or(&binary.path)
-            ),
-        });
+        let user = binary
+            .path
+            .strip_prefix(app.path.as_str())
+            .unwrap_or(&binary.path);
+        if info.is_none() {
+            found.push(Unchecked {
+                check: UncheckedCheck::PurposeStrings,
+                cause: UncheckedCause::PropertyListUnreadable,
+                location: format!("{directory}Info.plist"),
+                architecture: None,
+                detail: format!(
+                    "{user} uses protected resources, but this Info.plist was not read: its \
+                     purpose strings were not checked"
+                ),
+            });
+        }
+        for localized in app
+            .localized_info
+            .iter()
+            .filter(|localized| localized.bundle == directory)
+        {
+            if let Err(why) = &localized.strings {
+                found.push(Unchecked {
+                    check: UncheckedCheck::PurposeStrings,
+                    cause: UncheckedCause::PropertyListUnreadable,
+                    location: localized.path.clone(),
+                    architecture: None,
+                    detail: format!(
+                        "{user} uses protected resources, but the {} localization was not \
+                         read ({why}): its purpose strings were not checked",
+                        localized.language
+                    ),
+                });
+            }
+        }
     }
 }
 

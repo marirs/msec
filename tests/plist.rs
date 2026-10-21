@@ -1,6 +1,7 @@
 //! msec's plist reader against Core Foundation's, through `plutil` (tests/fixtures/plist,
-//! rebuilt by build_plist.sh): the same verdict on every crafted file, and for every file both
-//! read, the XML `plutil -convert xml1` writes, byte for byte.
+//! rebuilt by build_plist.sh): the same verdict on every crafted file (binary, XML, and OpenStep
+//! text and `.strings` files), and for every file both read, the XML `plutil -convert xml1`
+//! writes, byte for byte.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -13,8 +14,7 @@ const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/plis
 /// instead of reading them.
 fn divergence(file: &str) -> Option<fn(&PlistError) -> bool> {
     match file {
-        // Old OpenStep text and encodings other than UTF-8, UTF-16 and ISO-8859-1 are not read.
-        "xml/openstep.xml" => Some(|error| matches!(error, PlistError::Unsupported(_))),
+        // Encodings other than UTF-8, UTF-16 and ISO-8859-1 are not read.
         "xml/shift-jis.xml" => Some(|error| matches!(error, PlistError::UnsupportedEncoding(_))),
         // Binary format 1x is not read (Core Foundation refuses this file too: it is a bplist00
         // body under a 1x header).
@@ -47,6 +47,7 @@ fn verdicts_match_core_foundation() {
     let verdicts = verdicts();
     assert!(verdicts.len() > 100, "{} fixtures", verdicts.len());
     let mut compared = 0;
+    let mut compared_openstep = 0;
     for (file, accepted) in verdicts {
         let result = parse(&read(&file));
         if let Some(expected_error) = divergence(&file) {
@@ -84,10 +85,15 @@ fn verdicts_match_core_foundation() {
         };
         assert_eq!(to_xml(&plist.root).unwrap(), expected, "{file}");
         compared += 1;
+        compared_openstep += usize::from(file.starts_with("openstep/"));
     }
     assert!(
         compared >= 30,
         "{compared} files compared with plutil's XML"
+    );
+    assert!(
+        compared_openstep >= 25,
+        "{compared_openstep} OpenStep files compared with plutil's XML"
     );
 }
 

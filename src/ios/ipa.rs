@@ -9,7 +9,7 @@ use super::info::BundleInfo;
 use super::privacy::PrivacyManifest;
 use super::profile::{ProfileError, ProvisioningProfile};
 use crate::archive::{ArchiveError, ZipArchive};
-use crate::plist::{self, Plist, PlistError};
+use crate::plist::{self, Plist, PlistError, Value};
 
 /// Largest `Info.plist` or privacy manifest read; real ones are a few kilobytes.
 const MAX_PLIST_BYTES: u64 = 8 * 1024 * 1024;
@@ -121,6 +121,10 @@ pub struct AppBundle {
     pub fairplay_metadata: bool,
     /// Localizations (`<language>.lproj` directories at the bundle root), sorted.
     pub localizations: Vec<String>,
+    /// Every `<language>.lproj/InfoPlist.strings` of the app and of its app extensions, watch
+    /// apps and App Clips (what iOS shows instead of `Info.plist` values in that language), in
+    /// archive order. Frameworks' are left out: their `Info.plist` holds no purpose strings.
+    pub localized_info: Vec<LocalizedInfo>,
     /// The main executable and every component's executable, read as Mach-O with their
     /// signatures checked; main executable first.
     pub binaries: Vec<BundleBinary>,
@@ -128,6 +132,20 @@ pub struct AppBundle {
     pub file_count: usize,
     /// Their uncompressed size, as the archive declares it.
     pub declared_bytes: u64,
+}
+
+/// One `InfoPlist.strings`: localized `Info.plist` values.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalizedInfo {
+    /// Its path in the archive (`Payload/A.app/fr.lproj/InfoPlist.strings`).
+    pub path: String,
+    /// The bundle it localizes: a directory with a trailing slash.
+    pub bundle: String,
+    /// The language (`fr`, `pt-BR`).
+    pub language: String,
+    /// The values by key, or why the file could not be read (Xcode writes a binary plist;
+    /// other toolchains ship `.strings` text, which is read too).
+    pub strings: Result<crate::plist::Dictionary, String>,
 }
 
 /// A bundle or library inside the app bundle.
@@ -313,6 +331,7 @@ fn read_app_bundle<R: Read + Seek>(
         .filter(|language| !language.is_empty())
         .map(str::to_owned)
         .collect();
+    let localized_info = localized_info(archive, &inside, &path);
     let profile_path = format!("{path}embedded.mobileprovision");
     let profile = archive
         .find(&profile_path)
@@ -367,6 +386,7 @@ fn read_app_bundle<R: Read + Seek>(
             .iter()
             .any(|relative| relative.starts_with("SC_Info/")),
         localizations: localizations.into_iter().collect(),
+        localized_info,
         file_count,
         declared_bytes,
         path,
@@ -403,6 +423,46 @@ fn read_info_plist<R: Read + Seek>(
 }
 
 /// A plist inside the bundle, or why it could not be read.
+/// The `InfoPlist.strings` of the app (`path`) and of the bundles inside it that have their
+/// own purpose strings (`.appex`, watch apps, App Clips); `inside` lists the app's files
+/// relative to `path`.
+fn localized_info<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    inside: &[&str],
+    path: &str,
+) -> Vec<LocalizedInfo> {
+    let mut found = Vec::new();
+    for relative in inside {
+        let Some(directory) = relative.strip_suffix(".lproj/InfoPlist.strings") else {
+            continue;
+        };
+        let (bundle, language) = match directory.rsplit_once('/') {
+            Some((bundle, language)) => (format!("{bundle}/"), language),
+            None => (String::new(), directory),
+        };
+        let own_purpose_strings =
+            bundle.is_empty() || bundle.ends_with(".appex/") || bundle.ends_with(".app/");
+        if language.is_empty() || !own_purpose_strings {
+            continue;
+        }
+        let file = format!("{path}{relative}");
+        let strings = read_plist(archive, &file).and_then(|plist| match plist.root {
+            Value::Dictionary(dictionary) => Ok(dictionary),
+            other => Err(format!(
+                "a {}, not a dictionary of strings",
+                other.type_name()
+            )),
+        });
+        found.push(LocalizedInfo {
+            path: file,
+            bundle: format!("{path}{bundle}"),
+            language: language.to_owned(),
+            strings,
+        });
+    }
+    found
+}
+
 fn read_plist<R: Read + Seek>(archive: &mut ZipArchive<R>, name: &str) -> Result<Plist, String> {
     let entry = archive.find(name).ok_or("not in the archive")?;
     if entry.uncompressed_size > MAX_PLIST_BYTES {

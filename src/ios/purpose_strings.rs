@@ -7,7 +7,9 @@
 //! Sources, read on 2026-10-21 (Apple's documentation, through its JSON data endpoints):
 //! - `uikit/requesting-access-to-protected-resources`: purpose strings are required for the
 //!   resources an app's code references, SDKs included; ITMS-90683 is the example message; a
-//!   purpose string must not be empty;
+//!   purpose string has the type its key requires (a string), is not blank or only whitespace,
+//!   is shorter than 4,000 bytes, and these rules hold for localized purpose strings too
+//!   (`InfoPlist.strings`, checked by [`localized_problems`]);
 //! - `bundleresources/protected-resources` and each key's page;
 //! - the framework articles naming each resource's APIs: AVFoundation (capture), AVFAudio
 //!   (`requestRecordPermission`), PhotoKit, Core Location, Contacts, EventKit (iOS 17 keys),
@@ -346,9 +348,43 @@ fn granted(value: &Value) -> bool {
     }
 }
 
+/// Apple: "The purpose string is shorter than 4,000 bytes."
+pub const MAX_PURPOSE_STRING_BYTES: usize = 4000;
+
+/// What is wrong with one purpose string's text for `resource`: blank (or only whitespace), or
+/// 4,000 bytes or longer; `None` when it is usable.
+fn text_problem(key: &str, text: &str, resource: &str) -> Option<String> {
+    if text.trim().is_empty() {
+        return Some(format!(
+            "{key} is empty: a purpose string must say why the app needs {resource}"
+        ));
+    }
+    if text.len() >= MAX_PURPOSE_STRING_BYTES {
+        return Some(format!(
+            "{key} is {} bytes: a purpose string must be shorter than 4,000 bytes",
+            thousands(text.len())
+        ));
+    }
+    None
+}
+
+/// `4123` as `4,123`.
+fn thousands(number: usize) -> String {
+    let digits = number.to_string();
+    let mut grouped = String::new();
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
+}
+
 /// What is wrong with a bundle's purpose string for one requirement; `None` when one of its
-/// keys holds a usable text. `descriptions` is the bundle's `usage_descriptions`;
-/// `wrong_types` its keys of the wrong type.
+/// keys holds a usable text (a non-blank string shorter than 4,000 bytes). `descriptions` is
+/// the bundle's `usage_descriptions`; `wrong_types` its keys of the wrong type. A localization
+/// does not stand in for the base value, which iOS falls back to.
 pub fn purpose_problem(
     requirement: &Requirement,
     descriptions: &[(String, String)],
@@ -360,11 +396,9 @@ pub fn purpose_problem(
             .find(|(named, _)| named == key)
             .map(|(_, text)| text.as_str())
     };
-    if requirement
-        .keys
-        .iter()
-        .any(|key| text_of(key).is_some_and(|text| !text.trim().is_empty()))
-    {
+    if requirement.keys.iter().any(|key| {
+        text_of(key).is_some_and(|text| text_problem(key, text, requirement.resource).is_none())
+    }) {
         return None;
     }
     let first = requirement.keys[0];
@@ -383,11 +417,36 @@ pub fn purpose_problem(
             wrong.key, wrong.found
         ));
     }
-    if let Some(key) = requirement.keys.iter().find(|key| text_of(key).is_some()) {
-        return Some(format!(
-            "{key} is empty: a purpose string must say why the app needs {}",
-            requirement.resource
-        ));
+    if let Some((key, text)) = requirement
+        .keys
+        .iter()
+        .find_map(|key| text_of(key).map(|text| (*key, text)))
+    {
+        return text_problem(key, text, requirement.resource);
     }
     Some(format!("Info.plist has no {first}{others}"))
+}
+
+/// What is wrong with a localization's values for `requirement`'s keys (`InfoPlist.strings`):
+/// Apple's rules hold for localized purpose strings too, so each key the localization sets
+/// must be a usable purpose string. A key it does not set falls back to `Info.plist`.
+pub fn localized_problems(
+    requirement: &Requirement,
+    strings: &crate::plist::Dictionary,
+) -> Vec<(&'static str, String)> {
+    requirement
+        .keys
+        .iter()
+        .filter_map(|key| {
+            let value = strings.get(key)?;
+            let problem = match value.as_str() {
+                None => Some(format!(
+                    "{key} is not a string ({}): iOS has no purpose string to show",
+                    value.type_name()
+                )),
+                Some(text) => text_problem(key, text, requirement.resource),
+            };
+            problem.map(|problem| (*key, problem))
+        })
+        .collect()
 }
