@@ -7,11 +7,15 @@
 #   distribution-app-store.ipa: the profiles/ profile of that kind;
 # - distribution-tampered-profile.ipa: profiles/tampered.mobileprovision (a development
 #   profile with one content byte changed after signing);
+# - distribution-developer-signed.ipa, distribution-self-signed.ipa: a development profile
+#   signed by a certificate without the profile-signing extension, and by a self-signed one
+#   (forgeries: their signatures verify);
 # - distribution-no-profile.ipa: no profile at all.
 # distribution-verdicts.txt, per variant: get-task-allow as codesign reads the entitlements;
 # the profile's ProvisionsAllDevices, number of ProvisionedDevices and get-task-allow as
-# `security cms -D` decodes them; and whether `openssl cms -verify -noverify` accepts its
-# signature.
+# `security cms -D` decodes them; whether `openssl cms -verify -noverify` accepts its signature;
+# whether `openssl cms -verify -CAfile` accepts its signer's chain to the test root
+# (profiles/root.der); and whether its signer carries Apple's profile-signing extension.
 # Needs macOS (codesign, security, plutil), OpenSSL 3 (OPENSSL, else Homebrew's openssl@3) and
 # python3.
 set -eu
@@ -26,6 +30,7 @@ if [ -z "$openssl" ]; then
 fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+"$openssl" x509 -inform DER -in profiles/root.der -out "$work/root.pem"
 
 # A key of a plist on standard input, as plutil prints it (`missing` when absent).
 plist_value() { # key
@@ -65,6 +70,21 @@ variant() { # name, profile (or "none")
       else
         echo "  signature: does not verify"
       fi
+      if "$openssl" cms -verify -inform DER -in "$bundle/embedded.mobileprovision" \
+        -CAfile "$work/root.pem" -purpose any -out /dev/null > /dev/null 2>&1; then
+        echo "  chain: to the test root"
+      else
+        echo "  chain: not to the test root"
+      fi
+      : > "$work/signer.pem"
+      "$openssl" cms -verify -noverify -inform DER -in "$bundle/embedded.mobileprovision" \
+        -signer "$work/signer.pem" -out /dev/null > /dev/null 2>&1 || :
+      if [ -s "$work/signer.pem" ] && "$openssl" x509 -in "$work/signer.pem" -noout -text |
+        grep -q "1.2.840.113635.100.6.58"; then
+        echo "  profile-signing extension: yes"
+      else
+        echo "  profile-signing extension: no"
+      fi
     fi
   } >> "$work/verdicts.txt"
 }
@@ -75,5 +95,7 @@ variant ad-hoc ad-hoc
 variant enterprise enterprise
 variant app-store app-store
 variant tampered-profile tampered
+variant developer-signed developer-signed
+variant self-signed self-signed
 variant no-profile none
 cp "$work/verdicts.txt" distribution-verdicts.txt

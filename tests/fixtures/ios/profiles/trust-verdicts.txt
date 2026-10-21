@@ -1,0 +1,13 @@
+ad-hoc: chains to the test root; profile-signing extension
+app-store: chains to the test root; profile-signing extension
+developer-signed: chains to the test root; no profile-signing extension
+development-ber: chains to the test root; profile-signing extension
+development: chains to the test root; profile-signing extension
+enterprise: chains to the test root; profile-signing extension
+expired: chains to the test root; profile-signing extension
+no-keychain: chains to the test root; profile-signing extension
+not-signed: does not chain to the test root; no profile-signing extension
+other-bundle: chains to the test root; profile-signing extension
+self-signed: does not chain to the test root; profile-signing extension
+tampered: does not chain to the test root; no profile-signing extension
+wildcard: chains to the test root; profile-signing extension

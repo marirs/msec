@@ -1,5 +1,6 @@
 ad-hoc: verified
 app-store: verified
+developer-signed: verified
 development-ber: verified
 development: verified
 enterprise: verified
@@ -7,5 +8,6 @@ expired: verified
 no-keychain: verified
 not-signed: not verified
 other-bundle: verified
+self-signed: verified
 tampered: not verified
 wildcard: verified

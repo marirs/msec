@@ -28,7 +28,7 @@ use crate::cms::{self, CmsError, VerifyProblem};
 
 /// SHA-256 of Apple's root certificates (DER), as macOS's system root store lists them:
 /// Apple Root CA, Apple Root CA - G2, Apple Root CA - G3.
-const APPLE_ROOTS: [&str; 3] = [
+pub(crate) const APPLE_ROOTS: [&str; 3] = [
     "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024",
     "c2b9b042dd57830e7d117dac55ac8ae19407d38e41d88f3215bc3a890444a050",
     "63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179",
@@ -250,7 +250,7 @@ fn ends_at_apple_root(chain: &[ChainCertificate]) -> bool {
 }
 
 /// From the leaf up: each next certificate is the one whose subject is the current issuer.
-fn chain_from(leaf: &[u8], certificates: &[Vec<u8>]) -> Vec<ChainCertificate> {
+pub(crate) fn chain_from(leaf: &[u8], certificates: &[Vec<u8>]) -> Vec<ChainCertificate> {
     let decoded: Vec<(Vec<u8>, CertificateInfo)> = certificates
         .iter()
         .filter_map(|der| Some((der.clone(), CertificateInfo::from_der(der).ok()?)))
@@ -308,6 +308,24 @@ fn issued_by(certificate: &[u8], issuer: &[u8]) -> Option<bool> {
         Err(crypto::VerifyError::Invalid) => Some(false),
         Err(crypto::VerifyError::UnsupportedKey) => None,
     }
+}
+
+/// The OIDs of a certificate's extensions (`2.5.29.19`, Apple's `1.2.840.113635.100.6.58`);
+/// empty when it cannot be read.
+pub(crate) fn extension_oids(certificate: &[u8]) -> Vec<String> {
+    let Ok(parsed) = x509_cert::Certificate::from_der(certificate) else {
+        return Vec::new();
+    };
+    parsed
+        .tbs_certificate()
+        .extensions()
+        .map(|extensions| {
+            extensions
+                .iter()
+                .map(|extension| extension.extn_id.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[derive(Default)]

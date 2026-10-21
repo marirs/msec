@@ -173,6 +173,19 @@ fn real_apple_signature() {
         })
         .collect();
     assert!(signer_findings.is_empty(), "{signer_findings:?}");
+    // Apple issued the profile, so the method is established: a development build.
+    let app = ipa.app.as_ref().unwrap();
+    let profile = app.profile.as_ref().unwrap().as_ref().unwrap();
+    assert_eq!(
+        profile
+            .signature
+            .trusted(&msec::ios::profile::ProfileTrust::APPLE),
+        Ok(())
+    );
+    assert_eq!(
+        msec::ios::distribution::of(app).kind(),
+        Some(msec::ios::profile::ProfileKind::Development)
+    );
     // An Xcode development build is signed "Apple Development" with a development profile:
     // the certificate fits, so nothing is reported.
     let mismatch = msec::ios::analysis::analyse_app(ipa.app.as_ref().unwrap(), "2026-10-21")
@@ -255,7 +268,8 @@ fn signer_findings() {
 /// certificate in a development build is expected; one on an App Store build is not.
 #[test]
 fn certificates_fit_the_profiles_distribution_method() {
-    use msec::ios::analysis::{AppRule, analyse_app};
+    use msec::ios::analysis::{AppRule, analyse_app, certificate_distribution_mismatch};
+    use msec::ios::distribution::Distribution;
     for (variant, expected) in [
         ("certificate-development", false),
         ("certificate-distribution", false),
@@ -264,10 +278,23 @@ fn certificates_fit_the_profiles_distribution_method() {
         ("fixture", false),
     ] {
         let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/{variant}.ipa")));
-        let found = analyse_app(ipa.app.as_ref().unwrap(), "2026-10-21")
-            .iter()
-            .any(|finding| finding.rule == AppRule::CertificateDistributionMismatch);
+        let app = ipa.app.as_ref().unwrap();
+        // The method the profile states, as if Apple had issued it: the test profiles are
+        // signed by a test CA, which ios_distribution.rs trusts to check the trust itself.
+        let profile = app.profile.as_ref().unwrap().as_ref().unwrap();
+        let stated = Distribution::Established {
+            kind: profile.kind(),
+            profile: app.provisioning_profile.clone().unwrap(),
+        };
+        let found = certificate_distribution_mismatch(app, &stated).is_some();
         assert_eq!(found, expected, "{variant}");
+        // As analysed, no test profile is Apple's, so nothing is judged.
+        assert!(
+            !analyse_app(app, "2026-10-21")
+                .iter()
+                .any(|finding| finding.rule == AppRule::CertificateDistributionMismatch),
+            "{variant}"
+        );
     }
 }
 

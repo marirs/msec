@@ -4,8 +4,11 @@
 //!
 //! Read as `security cms -D` decodes them (the tests compare the content with its output) and
 //! the CMS signature checked like `openssl cms -verify -noverify`: the signature is the signer
-//! certificate's, but the chain to Apple's root is not checked. App Store downloads carry no
-//! profile; development, ad hoc and enterprise builds do.
+//! certificate's. Whether Apple issued the profile is a separate question
+//! ([`ProfileSignature::trusted`]): the signer's chain must verify link by link to one of
+//! Apple's roots, pinned by fingerprint, and the signer must carry Apple's provisioning-profile
+//! signing extension, which a developer's own Apple-issued certificate does not. App Store
+//! downloads carry no profile; development, ad hoc and enterprise builds do.
 //!
 //! [`entitlement_mismatches`] approximates what iOS checks at install: every entitlement the
 //! app's signature claims must be allowed by the profile (equal, or matched by a trailing `*`).
@@ -13,6 +16,7 @@
 
 use crate::android::signing::certificate::CertificateInfo;
 use crate::cms::{self, CmsError, VerifyProblem};
+use crate::macho::signer::ChainCertificate;
 use crate::plist::date::{CivilTime, absolute_from_civil, civil_from_absolute};
 use crate::plist::{self, Dictionary, Plist, PlistError, Value};
 
@@ -79,6 +83,144 @@ pub struct ProfileSignature {
     pub certificates: Vec<CertificateInfo>,
     /// Whether the signer's signature verifies over the content (chain not checked).
     pub verified: Result<(), VerifyProblem>,
+    /// The signer's chain, leaf first, as far as issuer names link the certificates the
+    /// signature carries, each link with whether its issuer's signature verifies.
+    pub chain: Vec<ChainCertificate>,
+    /// The OIDs of the signer certificate's extensions.
+    pub signer_extensions: Vec<String>,
+}
+
+/// Who must have issued a profile for its contents to be believed: its signer's chain must
+/// end at one of `roots` (SHA-256 fingerprints of self-signed certificates) with every link
+/// verifying, and the signer must carry `signer_extension`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProfileTrust<'a> {
+    /// The trusted roots' SHA-256 fingerprints (lower-case hex).
+    pub roots: &'a [&'a str],
+    /// The extension (OID) the signer certificate must carry.
+    pub signer_extension: &'a str,
+}
+
+/// Apple's provisioning-profile signing extension. Observed on the signer ("Apple iPhone OS
+/// Provisioning Profile Signing", issued by "Apple iPhone Certification Authority") of every
+/// Apple profile examined, and absent from developer certificates (which carry
+/// `1.2.840.113635.100.6.1.2` and `.12`, under WWDR); Apple does not document it.
+pub const APPLE_PROFILE_SIGNING_EXTENSION: &str = "1.2.840.113635.100.6.58";
+
+impl ProfileTrust<'static> {
+    /// Apple: the roots msec pins for code signatures (Apple Root CA, G2, G3) and Apple's
+    /// provisioning-profile signing extension.
+    pub const APPLE: Self = Self {
+        roots: &crate::macho::signer::APPLE_ROOTS,
+        signer_extension: APPLE_PROFILE_SIGNING_EXTENSION,
+    };
+}
+
+/// Why a profile is not trusted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProfileTrustProblem {
+    /// The signature does not verify over the content.
+    NotVerified(VerifyProblem),
+    /// The signer's chain does not end at a trusted root (`ending`: the last certificate's
+    /// name).
+    NotAnchored {
+        /// The last certificate of the chain, by name.
+        ending: String,
+    },
+    /// A link's issuer signature does not verify, or uses an algorithm msec does not verify
+    /// (`unsupported`).
+    LinkNotVerified {
+        /// The certificate whose issuer's signature failed.
+        at: String,
+        /// The algorithm or key is not one msec verifies.
+        unsupported: bool,
+    },
+    /// The chain is trusted, but the signer is not a profile-signing certificate.
+    NotProfileSigner {
+        /// The signer, by name.
+        signer: String,
+    },
+}
+
+impl std::fmt::Display for ProfileTrustProblem {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotVerified(problem) => write!(
+                formatter,
+                "its signature does not verify ({})",
+                crate::macho::signer::SignerProblem::Verify(problem.clone())
+            ),
+            Self::NotAnchored { ending } => write!(
+                formatter,
+                "its signer's certificate chain ends at {ending}, not at one of Apple's root \
+                 certificates"
+            ),
+            Self::LinkNotVerified {
+                at,
+                unsupported: true,
+            } => write!(
+                formatter,
+                "the issuer's signature on {at} uses an algorithm msec does not verify"
+            ),
+            Self::LinkNotVerified {
+                at,
+                unsupported: false,
+            } => write!(formatter, "the issuer's signature on {at} does not verify"),
+            Self::NotProfileSigner { signer } => write!(
+                formatter,
+                "it is signed by {signer}, which is not Apple's provisioning-profile signing \
+                 certificate (it lacks extension {APPLE_PROFILE_SIGNING_EXTENSION})"
+            ),
+        }
+    }
+}
+
+impl ProfileSignature {
+    /// Whether `trust`'s issuer signed this profile: the signature verifies, the signer's
+    /// chain verifies link by link to one of `trust.roots`, and the signer carries
+    /// `trust.signer_extension`. Expiry and revocation are not checked: the question is who
+    /// issued the profile, not whether its certificates are still valid today.
+    pub fn trusted(&self, trust: &ProfileTrust<'_>) -> Result<(), ProfileTrustProblem> {
+        if let Err(problem) = &self.verified {
+            return Err(ProfileTrustProblem::NotVerified(problem.clone()));
+        }
+        let named = |link: &ChainCertificate| {
+            link.common_name
+                .clone()
+                .unwrap_or_else(|| link.certificate.subject.clone())
+        };
+        let Some(last) = self.chain.last() else {
+            return Err(ProfileTrustProblem::NotAnchored {
+                ending: "no readable certificate".to_owned(),
+            });
+        };
+        let anchored = trust.roots.contains(&last.certificate.sha256.as_str())
+            && last.certificate.subject == last.certificate.issuer;
+        if !anchored {
+            return Err(ProfileTrustProblem::NotAnchored {
+                ending: named(last),
+            });
+        }
+        if let Some(link) = self.chain[..self.chain.len() - 1]
+            .iter()
+            .find(|link| link.verified_by_next != Some(true))
+        {
+            return Err(ProfileTrustProblem::LinkNotVerified {
+                at: named(link),
+                unsupported: link.verified_by_next.is_none(),
+            });
+        }
+        if !self
+            .signer_extensions
+            .iter()
+            .any(|oid| oid == trust.signer_extension)
+        {
+            return Err(ProfileTrustProblem::NotProfileSigner {
+                signer: named(&self.chain[0]),
+            });
+        }
+        Ok(())
+    }
 }
 
 /// A provisioning profile.
@@ -124,6 +266,19 @@ impl ProvisioningProfile {
             .iter()
             .filter_map(|der| CertificateInfo::from_der(der).ok())
             .collect();
+        let signer_der: Option<Vec<u8>> = signed
+            .signers
+            .first()
+            .and_then(|signer| signed.signer_certificate(signer))
+            .map(<[u8]>::to_vec);
+        let chain = signer_der
+            .as_deref()
+            .map(|leaf| crate::macho::signer::chain_from(leaf, &signed.certificates))
+            .unwrap_or_default();
+        let signer_extensions = signer_der
+            .as_deref()
+            .map(crate::macho::signer::extension_oids)
+            .unwrap_or_default();
         let (signer, verified) = match signed.signers.first() {
             None => (None, Err(VerifyProblem::NoCertificate)),
             Some(signer) => match signed.verify(signer, &content) {
@@ -176,6 +331,8 @@ impl ProvisioningProfile {
                 signer,
                 certificates,
                 verified,
+                chain,
+                signer_extensions,
             },
             name: string("Name"),
             uuid: string("UUID"),

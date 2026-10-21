@@ -5,6 +5,8 @@ development:
   ProvisionedDevices: 2
   profile get-task-allow: true
   signature: verifies
+  chain: to the test root
+  profile-signing extension: yes
 ad-hoc:
   get-task-allow: true
   profile: present
@@ -12,6 +14,8 @@ ad-hoc:
   ProvisionedDevices: 2
   profile get-task-allow: false
   signature: verifies
+  chain: to the test root
+  profile-signing extension: yes
 enterprise:
   get-task-allow: true
   profile: present
@@ -19,6 +23,8 @@ enterprise:
   ProvisionedDevices: 0
   profile get-task-allow: false
   signature: verifies
+  chain: to the test root
+  profile-signing extension: yes
 app-store:
   get-task-allow: true
   profile: present
@@ -26,6 +32,8 @@ app-store:
   ProvisionedDevices: 0
   profile get-task-allow: false
   signature: verifies
+  chain: to the test root
+  profile-signing extension: yes
 tampered-profile:
   get-task-allow: true
   profile: present
@@ -33,6 +41,26 @@ tampered-profile:
   ProvisionedDevices: 2
   profile get-task-allow: true
   signature: does not verify
+  chain: not to the test root
+  profile-signing extension: no
+developer-signed:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+  chain: to the test root
+  profile-signing extension: no
+self-signed:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+  chain: not to the test root
+  profile-signing extension: yes
 no-profile:
   get-task-allow: true
   profile: none

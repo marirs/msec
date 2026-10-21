@@ -832,28 +832,41 @@ fn upload_requirement_checks(app: &AppBundle, today: &str, findings: &mut Vec<Ap
 /// The signing certificate must fit the distribution method the provisioning profile declares:
 /// development certificates sign development builds; App Store, ad hoc and in-house builds are
 /// signed with a distribution certificate. A development certificate in a development build is
-/// what it should be, not a finding. Without a profile (App Store downloads carry none) the
-/// intended method is unknown, and nothing is reported. Only a signature that verifies counts.
+/// what it should be, not a finding. Only a profile Apple issued states the intended method;
+/// without one (App Store downloads carry none, a forged one proves nothing) nothing is
+/// reported. Only a code signature that verifies counts.
 fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    findings.extend(certificate_distribution_mismatch(
+        app,
+        &super::distribution::of(app),
+    ));
+}
+
+/// The certificate check against a given distribution method: a finding when the main
+/// executable's verified signer is a development certificate on an ad hoc, in-house or App
+/// Store build, or a distribution certificate on a development build. Nothing when the method
+/// is not established. [`analyse_app`] passes the method an Apple-issued profile establishes.
+pub fn certificate_distribution_mismatch(
+    app: &AppBundle,
+    distribution: &super::distribution::Distribution,
+) -> Option<AppFinding> {
     use super::distribution::Distribution;
     use super::profile::ProfileKind;
     use crate::macho::signer::CertificateUse;
 
-    // Only a profile whose signature verifies establishes the method; an untrusted one leaves
-    // the check unchecked (`coverage::unchecked`).
+    // Only a profile Apple issued establishes the method (`distribution::of`); otherwise the
+    // check is unchecked (`coverage::unchecked`), not judged against an untrusted claim.
     let (Distribution::Established { kind, profile }, Some(main)) =
-        (super::distribution::of(app), app.binaries.first())
+        (distribution, app.binaries.first())
     else {
-        return;
+        return None;
     };
-    let Some(signer) = main
+    let kind = *kind;
+    let signer = main
         .signatures
         .first()
         .and_then(|check| check.signer.as_ref())
-        .filter(|signer| signer.signature.is_ok())
-    else {
-        return;
-    };
+        .filter(|signer| signer.signature.is_ok())?;
     let fits = match (kind, signer.certificate_use) {
         (ProfileKind::Development, CertificateUse::Development)
         | (
@@ -866,7 +879,7 @@ fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
         _ => false,
     };
     if fits {
-        return;
+        return None;
     }
     let named = signer
         .common_name
@@ -888,12 +901,12 @@ fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
              development, which uses a development certificate"
         ),
     };
-    findings.push(AppFinding {
+    Some(AppFinding {
         rule: AppRule::CertificateDistributionMismatch,
-        location: profile,
+        location: profile.clone(),
         subject: Some(named),
         detail,
-    });
+    })
 }
 
 /// The bundle directory whose privacy manifests cover a binary: a framework's or an app
