@@ -10,6 +10,7 @@
 //! that C code lacks protection. Run-path search paths in the system's read-only volumes
 //! (`/usr/lib/swift`, which swiftc adds) are not "outside the bundle".
 
+use super::profile::ProfileKind;
 use super::{AppBundle, BundleBinary, SignatureKind};
 use crate::android::analysis::{Origin, Severity};
 use crate::macho::der_entitlements::same_entitlements;
@@ -161,35 +162,55 @@ pub struct BinaryFinding {
 /// Every check on every executable of the bundle that was read.
 pub fn analyse_binaries(app: &AppBundle) -> Vec<BinaryFinding> {
     let mut findings: Vec<BinaryFinding> = app.binaries.iter().flat_map(analyse_binary).collect();
-    // Either encoding counts: iOS 15 and later read the DER entitlements, earlier releases the
-    // XML ones.
-    let debuggable = |main: &BundleBinary| {
-        let xml = matches!(
-            main.entitlements(),
-            Some(Ok(entitlements)) if entitlements.root.get("get-task-allow") == Some(&Value::Boolean(true))
-        );
-        let der = main.images().any(|image| {
-            matches!(&image.signature, Some(Ok(signature)) if matches!(
-                signature.der_entitlements_decoded(),
-                Some(Ok(der)) if der.dictionary.get("get-task-allow") == Some(&Value::Boolean(true))
-            ))
-        });
-        xml || der
-    };
+    // MobSF reports get-task-allow whatever the build; msec does too, and says what the
+    // distribution method makes of it, which callers judge by (`super::distribution`): a
+    // development build is expected to have it.
     if let Some(main) = app.binaries.first()
         && debuggable(main)
     {
+        let detail = match super::distribution::of(app) {
+            super::distribution::Distribution::Established { kind, .. } => match kind {
+                ProfileKind::Development => "get-task-allow is true: the app can be debugged, \
+                                             as a development build (development profile) is \
+                                             meant to be"
+                    .to_owned(),
+                other => format!(
+                    "get-task-allow is true: the app can be debugged, in a build whose \
+                     profile is for {} distribution",
+                    other.label()
+                ),
+            },
+            super::distribution::Distribution::Unknown { reason, .. } => format!(
+                "get-task-allow is true: the app can be debugged; whether it is a development \
+                 build is not established: {reason}"
+            ),
+        };
         findings.push(BinaryFinding {
             rule: BinaryRule::GetTaskAllow,
             binary: main.path.clone(),
             architecture: None,
-            detail: "get-task-allow is true: the app can be debugged (a development build)"
-                .to_owned(),
+            detail,
         });
     }
     findings.sort_by(|left, right| (left.rule, &left.binary).cmp(&(right.rule, &right.binary)));
     findings.dedup();
     findings
+}
+
+/// The executable's entitlements set `get-task-allow`. Either encoding counts: iOS 15 and
+/// later read the DER entitlements, earlier releases the XML ones.
+pub(super) fn debuggable(binary: &BundleBinary) -> bool {
+    let xml = matches!(
+        binary.entitlements(),
+        Some(Ok(entitlements)) if entitlements.root.get("get-task-allow") == Some(&Value::Boolean(true))
+    );
+    let der = binary.images().any(|image| {
+        matches!(&image.signature, Some(Ok(signature)) if matches!(
+            signature.der_entitlements_decoded(),
+            Some(Ok(der)) if der.dictionary.get("get-task-allow") == Some(&Value::Boolean(true))
+        ))
+    });
+    xml || der
 }
 
 /// The checks on one executable (every slice), the entitlement check aside.
@@ -814,14 +835,15 @@ fn upload_requirement_checks(app: &AppBundle, today: &str, findings: &mut Vec<Ap
 /// what it should be, not a finding. Without a profile (App Store downloads carry none) the
 /// intended method is unknown, and nothing is reported. Only a signature that verifies counts.
 fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    use super::distribution::Distribution;
     use super::profile::ProfileKind;
     use crate::macho::signer::CertificateUse;
 
-    let (Some(location), Some(Ok(profile)), Some(main)) = (
-        &app.provisioning_profile,
-        &app.profile,
-        app.binaries.first(),
-    ) else {
+    // Only a profile whose signature verifies establishes the method; an untrusted one leaves
+    // the check unchecked (`coverage::unchecked`).
+    let (Distribution::Established { kind, profile }, Some(main)) =
+        (super::distribution::of(app), app.binaries.first())
+    else {
         return;
     };
     let Some(signer) = main
@@ -832,7 +854,6 @@ fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
     else {
         return;
     };
-    let kind = profile.kind();
     let fits = match (kind, signer.certificate_use) {
         (ProfileKind::Development, CertificateUse::Development)
         | (
@@ -869,7 +890,7 @@ fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
     };
     findings.push(AppFinding {
         rule: AppRule::CertificateDistributionMismatch,
-        location: location.clone(),
+        location: profile,
         subject: Some(named),
         detail,
     });

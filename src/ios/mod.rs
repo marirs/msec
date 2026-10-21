@@ -14,6 +14,7 @@ pub mod analysis;
 pub mod ats;
 mod binaries;
 pub mod coverage;
+pub mod distribution;
 mod info;
 mod ipa;
 pub mod privacy;

@@ -1,0 +1,38 @@
+development:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: verifies
+ad-hoc:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: false
+  signature: verifies
+enterprise:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: true
+  ProvisionedDevices: 0
+  profile get-task-allow: false
+  signature: verifies
+app-store:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 0
+  profile get-task-allow: false
+  signature: verifies
+tampered-profile:
+  get-task-allow: true
+  profile: present
+  ProvisionsAllDevices: missing
+  ProvisionedDevices: 2
+  profile get-task-allow: true
+  signature: does not verify
+no-profile:
+  get-task-allow: true
+  profile: none

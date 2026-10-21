@@ -2,7 +2,7 @@
 //! APPCHK: a limitation is a check msec does not have; this is a check msec has that could not
 //! run on some part of this app). A rule fed by an unchecked part is incomplete, not clean.
 //!
-//! Four causes exist:
+//! Five causes exist:
 //! - the App Store encrypted an executable (FairPlay, `cryptid` set): its code pages cannot be
 //!   hashed, and the `__TEXT` sections msec reads (Objective-C method names, C strings) are
 //!   ciphertext. Load commands, imports and the code signature stay readable;
@@ -11,7 +11,11 @@
 //! - `Info.plist` does not record what a check reads (`DTSDKName`, `MinimumOSVersion` for the
 //!   upload requirements);
 //! - the `Info.plist` a check reads could not be read (purpose strings of a bundle whose code
-//!   uses a protected resource).
+//!   uses a protected resource);
+//! - the distribution method is not established ([`super::distribution`]), so a check whose
+//!   verdict depends on it reaches none: `get-task-allow` (expected in a development build,
+//!   not in a distribution one), and the certificate against the method when a profile is
+//!   present but cannot be trusted.
 //!
 //! The C strings of an encrypted executable feed the secret and tracker scans, which report
 //! the executable through [`crate::package_strings::Visitor::encrypted`]; they are listed here
@@ -52,6 +56,11 @@ pub enum UncheckedCheck {
     UploadRequirements,
     /// Purpose strings for the protected resources a bundle's code uses.
     PurposeStrings,
+    /// Whether `get-task-allow`, which the main executable sets, is expected (a development
+    /// build) or a finding (a distribution build).
+    DebuggableBuild,
+    /// The signing certificate against the distribution method.
+    CertificateDistribution,
 }
 
 impl UncheckedCheck {
@@ -79,6 +88,8 @@ impl UncheckedCheck {
                 AppRule::UploadRequirementUpcoming.key(),
             ],
             Self::PurposeStrings => vec![AppRule::PurposeStringMissing.key()],
+            Self::DebuggableBuild => vec![BinaryRule::GetTaskAllow.key()],
+            Self::CertificateDistribution => vec![AppRule::CertificateDistributionMismatch.key()],
         }
     }
 }
@@ -94,6 +105,8 @@ pub enum UncheckedCause {
     NotRecorded,
     /// The property list the check reads could not be read.
     PropertyListUnreadable,
+    /// The distribution method is not established.
+    DistributionUnknown,
 }
 
 /// Everything msec's checks could not examine in `app`: by executable, then slice, then
@@ -106,7 +119,56 @@ pub fn unchecked(app: &AppBundle) -> Vec<Unchecked> {
     }
     unrecorded_build(app, &mut found);
     unread_purpose_strings(app, &mut found);
+    unknown_distribution(app, &mut found);
     found
+}
+
+/// Checks that need the distribution method, when it is not established: `get-task-allow`
+/// whenever the main executable sets it; the certificate when a profile is present but cannot
+/// be trusted (without one, as in App Store downloads, there is no intended method to compare
+/// with, and the certificate check does not apply).
+fn unknown_distribution(app: &AppBundle, found: &mut Vec<Unchecked>) {
+    let super::distribution::Distribution::Unknown {
+        reason,
+        profile_present,
+    } = super::distribution::of(app)
+    else {
+        return;
+    };
+    let Some(main) = app.binaries.first() else {
+        return;
+    };
+    if super::analysis::debuggable(main) {
+        found.push(Unchecked {
+            check: UncheckedCheck::DebuggableBuild,
+            cause: UncheckedCause::DistributionUnknown,
+            location: main.path.clone(),
+            architecture: None,
+            detail: format!(
+                "get-task-allow is true, and whether this is a development build (where it is \
+                 expected) is not established: {reason}"
+            ),
+        });
+    }
+    let signed_with_certificate = main
+        .signatures
+        .first()
+        .and_then(|check| check.signer.as_ref())
+        .is_some_and(|signer| signer.signature.is_ok());
+    if profile_present && signed_with_certificate {
+        found.push(Unchecked {
+            check: UncheckedCheck::CertificateDistribution,
+            cause: UncheckedCause::DistributionUnknown,
+            location: app
+                .provisioning_profile
+                .clone()
+                .unwrap_or_else(|| main.path.clone()),
+            architecture: None,
+            detail: format!(
+                "the signing certificate was not compared with the distribution method: {reason}"
+            ),
+        });
+    }
 }
 
 /// Bundles whose code uses a protected resource but whose `Info.plist`, or one of whose
