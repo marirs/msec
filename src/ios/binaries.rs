@@ -3,10 +3,12 @@
 //! requirements and entitlements slots, and the two slots that seal the bundle itself
 //! (`Info.plist` and `_CodeSignature/CodeResources`), against the bundle's own files.
 //!
-//! What this does not check: the CMS signature's certificates, the resource seal's contents
+//! A CMS signature is checked over the primary CodeDirectory, with its certificate chain
+//! ([`crate::macho::signer`]). What this does not check: the resource seal's contents
 //! (each file CodeResources lists), and nested code's own seals beyond its executable. A
 //! signature whose hashes all match shows the binary and its sealed files are unchanged since
-//! signing; it does not show who signed it.
+//! signing; the signer check shows whose key signed it and whether Apple issued that key's
+//! certificate.
 
 use std::io::{Read, Seek};
 
@@ -15,6 +17,7 @@ use crate::macho::signature::{
     CodeSignature, SLOT_DER_ENTITLEMENTS, SLOT_ENTITLEMENTS, SLOT_INFO_PLIST, SLOT_REQUIREMENTS,
     SLOT_RESOURCES,
 };
+use crate::macho::signer::Signer;
 use crate::macho::{MachFile, MachO, parse};
 use crate::plist::{Plist, PlistError};
 
@@ -92,6 +95,9 @@ pub struct SignatureCheck {
     /// The signature's own requirements and entitlements match their slots; `None` when none
     /// is sealed.
     pub embedded_blobs: Option<bool>,
+    /// Who signed it, for a signature with a CMS signature: whether that verifies over the
+    /// primary CodeDirectory, the certificate chain, and whether it ends at Apple's root.
+    pub signer: Option<Signer>,
     /// Why some checks did not run.
     pub note: Option<String>,
 }
@@ -115,7 +121,7 @@ pub enum SignatureKind {
     Unreadable(String),
     /// Ad hoc: no certificate (development tools and the linker sign this way).
     AdHoc,
-    /// Signed with a certificate (a CMS signature is present; not verified yet).
+    /// Signed with a certificate (a CMS signature is present; see [`SignatureCheck::signer`]).
     Certificate,
 }
 
@@ -228,6 +234,7 @@ fn check(
         info_plist: None,
         resources: None,
         embedded_blobs: None,
+        signer: None,
         note: None,
     };
     let signature = match &image.signature {
@@ -247,6 +254,19 @@ fn check(
     } else {
         SignatureKind::AdHoc
     };
+    // The CMS signature signs the CodeDirectory in slot 0, whichever is best for page hashes.
+    result.signer = signature
+        .cms
+        .as_deref()
+        .filter(|cms| !cms.is_empty())
+        .map(|cms| {
+            let primary = signature
+                .code_directories
+                .iter()
+                .find(|directory| directory.slot == 0)
+                .map(|directory| directory.bytes());
+            Signer::check(cms, primary)
+        });
     result.identifier = Some(directory.identifier.clone());
     result.team_id = directory.team_id.clone();
     result.cdhash = directory.cdhash();

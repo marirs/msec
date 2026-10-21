@@ -18,6 +18,8 @@ use crate::android::signing::crypto::{self, Hash, Primitive, VerifyError};
 const OID_SIGNED_DATA: &str = "1.2.840.113549.1.7.2";
 /// `id-messageDigest`, the signed attribute holding the content's digest.
 const OID_MESSAGE_DIGEST: &str = "1.2.840.113549.1.9.4";
+/// `id-signingTime`, the signed attribute holding when the signer says it signed.
+const OID_SIGNING_TIME: &str = "1.2.840.113549.1.9.5";
 /// Deepest nesting read; SignedData needs about ten levels.
 const MAX_DEPTH: usize = 32;
 
@@ -91,6 +93,9 @@ pub struct SignedAttributes {
     pub reencoded: Vec<u8>,
     /// The `messageDigest` attribute.
     pub message_digest: Option<Vec<u8>>,
+    /// The `signingTime` attribute, `yyyy-MM-dd HH:mm:ss` UTC: when the signer's clock says it
+    /// signed (unauthenticated beyond the signer's own signature).
+    pub signing_time: Option<String>,
 }
 
 impl SignedData {
@@ -250,18 +255,50 @@ fn signed_attributes(attributes: &Node<'_>) -> Option<SignedAttributes> {
     }
     let mut reencoded = attributes.raw.to_vec();
     reencoded[0] = 0x31;
-    let message_digest = children(attributes, 5)?.iter().find_map(|attribute| {
-        let parts = children(attribute, 6)?;
-        if oid(parts.first()?)?.as_str() != OID_MESSAGE_DIGEST {
-            return None;
-        }
-        let values = children(parts.get(1)?, 7)?;
-        values.first().and_then(|value| octets(value, 8))
-    });
+    let listed = children(attributes, 5)?;
+    let value_of = |wanted: &str| -> Option<Node<'_>> {
+        listed.iter().find_map(|attribute| {
+            let parts = children(attribute, 6)?;
+            if oid(parts.first()?)?.as_str() != wanted {
+                return None;
+            }
+            children(parts.get(1)?, 7)?.into_iter().next()
+        })
+    };
+    let message_digest = value_of(OID_MESSAGE_DIGEST).and_then(|value| octets(&value, 8));
+    let signing_time = value_of(OID_SIGNING_TIME).and_then(|value| time(&value));
     Some(SignedAttributes {
         reencoded,
         message_digest,
+        signing_time,
     })
+}
+
+/// A `UTCTime` (two-digit years: 50 to 99 are 19xx, RFC 5280) or `GeneralizedTime` in UTC
+/// (`Z`), as `yyyy-MM-dd HH:mm:ss`. Fractions and offsets are not read.
+fn time(node: &Node<'_>) -> Option<String> {
+    let text = std::str::from_utf8(node.value).ok()?;
+    let digits = text.strip_suffix('Z')?;
+    let full = match (node.tag, digits.len()) {
+        (0x17, 12) => {
+            let year: u32 = digits[..2].parse().ok()?;
+            format!("{}{digits}", if year >= 50 { "19" } else { "20" })
+        }
+        (0x18, 14) => digits.to_owned(),
+        _ => return None,
+    };
+    if !full.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!(
+        "{}-{}-{} {}:{}:{}",
+        &full[..4],
+        &full[4..6],
+        &full[6..8],
+        &full[8..10],
+        &full[10..12],
+        &full[12..14]
+    ))
 }
 
 /// A BER element.

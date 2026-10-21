@@ -14,6 +14,7 @@
 mod hardening;
 mod image;
 pub mod signature;
+pub mod signer;
 
 pub use hardening::Hardening;
 pub use image::{

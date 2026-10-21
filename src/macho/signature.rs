@@ -207,6 +207,11 @@ impl CodeSignature {
 }
 
 impl CodeDirectory {
+    /// The CodeDirectory's own bytes: what a CMS signature signs and the CDHash hashes.
+    pub fn bytes(&self) -> &[u8] {
+        &self.blob
+    }
+
     /// `CS_ADHOC`: no certificate signs it.
     pub fn is_adhoc(&self) -> bool {
         self.flags & CS_ADHOC != 0

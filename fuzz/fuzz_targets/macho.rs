@@ -1,8 +1,10 @@
 //! The Mach-O reader: thin and universal files, every load command, the symbol table, the code
-//! signature (CodeDirectories, entitlements), hardening, and page-hash verification.
+//! signature (CodeDirectories, entitlements), hardening, page-hash verification, and the CMS
+//! signature's signer and certificate chain.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use msec::macho::signer::Signer;
 use msec::macho::{Hardening, parse};
 
 fuzz_target!(|data: &[u8]| {
@@ -16,6 +18,10 @@ fuzz_target!(|data: &[u8]| {
         };
         let _ = Hardening::of(image);
         if let Some(Ok(signature)) = &image.signature {
+            if let Some(cms) = &signature.cms {
+                let primary = signature.code_directories.first().map(|directory| directory.bytes());
+                let _ = Signer::check(cms, primary);
+            }
             for directory in &signature.code_directories {
                 let _ = directory.cdhash();
                 let _ = directory.special_slot(1);

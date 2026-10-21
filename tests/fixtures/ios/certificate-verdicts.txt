@@ -1,0 +1,28 @@
+development:
+  Authority=Apple Development: msec Fixture (P1Q2R3S4T5)
+  Authority=msec Test Worldwide Developer Relations
+  Authority=msec Test Root CA
+  TeamIdentifier=A1B2C3D4E5
+  verify: valid
+distribution:
+  Authority=Apple Distribution: msec Fixture (A1B2C3D4E5)
+  Authority=msec Test Worldwide Developer Relations
+  Authority=msec Test Root CA
+  TeamIdentifier=A1B2C3D4E5
+  verify: valid
+not-in-profile:
+  Authority=Apple Distribution: msec Fixture (A1B2C3D4E5)
+  Authority=msec Test Worldwide Developer Relations
+  Authority=msec Test Root CA
+  TeamIdentifier=A1B2C3D4E5
+  verify: valid
+cms-tampered:
+  Authority=(unavailable)
+  TeamIdentifier=A1B2C3D4E5
+  verify: Fixture.app: invalid signature (code or signature have been modified)
+team-mismatch:
+  Authority=Apple Distribution: msec Fixture (A1B2C3D4E5)
+  Authority=msec Test Worldwide Developer Relations
+  Authority=msec Test Root CA
+  TeamIdentifier=Z9Y8X7W6V5
+  verify: valid
