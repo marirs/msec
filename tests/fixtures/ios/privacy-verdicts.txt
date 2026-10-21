@@ -1,0 +1,13 @@
+Fixture:
+  import NSFileSystemFreeSize
+  import NSUserDefaults
+  import mach_absolute_time
+  import stat
+  import statfs
+  selector activeInputModes
+  selector systemUptime
+Frameworks/Lib.framework/Lib:
+  import fstat
+Frameworks/Alamofire.framework/Alamofire:
+PrivacyInfo.xcprivacy: PrivacyInfo.xcprivacy: OK
+Frameworks/Lib.framework/PrivacyInfo.xcprivacy: Frameworks/Lib.framework/PrivacyInfo.xcprivacy: OK

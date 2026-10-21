@@ -480,6 +480,19 @@ pub enum AppRule {
     /// The main executable's signing certificate is not among the profile's
     /// `DeveloperCertificates`: iOS does not install the app (msec).
     ProfileCertificateMismatch,
+    /// A privacy manifest is invalid: wrong types or missing keys, an unknown category, data
+    /// type or purpose, an empty list, tracking without domains (App Store Connect:
+    /// ITMS-91056) (msec).
+    PrivacyManifestInvalid,
+    /// A privacy manifest gives a reason code that is not approved for its category (App
+    /// Store Connect: ITMS-91055) (msec).
+    PrivacyReasonInvalid,
+    /// An executable uses a required-reason API whose category no privacy manifest covering
+    /// it declares (App Store Connect: ITMS-91053) (msec).
+    RequiredReasonUndeclared,
+    /// A framework on Apple's list of commonly used third-party SDKs ships no privacy
+    /// manifest (App Store Connect: ITMS-91061) (msec).
+    SdkPrivacyManifestMissing,
     /// `NSAllowsArbitraryLoads` is in effect: ATS is off for every connection (MobSF).
     AtsArbitraryLoads,
     /// `NSAllowsArbitraryLoads` is set but iOS 10+ ignores it, because a narrower key is
@@ -511,6 +524,10 @@ impl AppRule {
             Self::ProfileEntitlementsMismatch => "msec_ios_profile_entitlements_mismatch",
             Self::ProfileDistribution => "msec_ios_profile_distribution",
             Self::ProfileCertificateMismatch => "msec_ios_profile_certificate_mismatch",
+            Self::PrivacyManifestInvalid => "msec_ios_privacy_manifest_invalid",
+            Self::PrivacyReasonInvalid => "msec_ios_privacy_reason_invalid",
+            Self::RequiredReasonUndeclared => "msec_ios_required_reason_undeclared",
+            Self::SdkPrivacyManifestMissing => "msec_ios_sdk_privacy_manifest_missing",
             Self::AtsArbitraryLoads => "msec_ios_ats_arbitrary_loads",
             Self::AtsArbitraryLoadsIgnored => "msec_ios_ats_arbitrary_loads_ignored",
             Self::AtsWebContent => "msec_ios_ats_web_content",
@@ -531,6 +548,10 @@ impl AppRule {
             | Self::ProfileBundleMismatch
             | Self::ProfileEntitlementsMismatch
             | Self::ProfileCertificateMismatch
+            | Self::PrivacyManifestInvalid
+            | Self::PrivacyReasonInvalid
+            | Self::RequiredReasonUndeclared
+            | Self::SdkPrivacyManifestMissing
             | Self::AtsArbitraryLoads
             | Self::AtsInsecureHttpDomain
             | Self::AtsWeakTlsDomain => Severity::High,
@@ -576,7 +597,154 @@ pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
     let mut findings = Vec::new();
     profile_checks(app, today, &mut findings);
     ats_checks(app, &mut findings);
+    privacy_checks(app, &mut findings);
     findings
+}
+
+/// The bundle directory whose privacy manifests cover a binary: a framework's or an app
+/// extension's own directory, else the app's (the main executable and loose libraries).
+fn owning_bundle<'path>(app: &'path AppBundle, binary: &'path str) -> &'path str {
+    let relative = binary.strip_prefix(app.path.as_str()).unwrap_or(binary);
+    let mut owner = app.path.len();
+    let mut offset = 0;
+    for part in relative.split('/') {
+        offset += part.len() + 1;
+        if part.ends_with(".framework") || part.ends_with(".appex") {
+            owner = app.path.len() + offset;
+        }
+    }
+    &binary[..owner.min(binary.len())]
+}
+
+/// The manifests that declare for the code of bundle `directory`: its own
+/// `PrivacyInfo.xcprivacy`, and those of resource bundles directly inside it (where static
+/// SDKs linked into its executable keep theirs).
+fn covering_manifests<'app>(
+    app: &'app AppBundle,
+    directory: &str,
+) -> Vec<&'app super::PrivacyManifest> {
+    app.privacy_manifests
+        .iter()
+        .filter(|manifest| {
+            let Some(relative) = manifest.path.strip_prefix(directory) else {
+                return false;
+            };
+            relative == "PrivacyInfo.xcprivacy"
+                || relative
+                    .strip_suffix("/PrivacyInfo.xcprivacy")
+                    .is_some_and(|bundle| bundle.ends_with(".bundle") && !bundle.contains('/'))
+        })
+        .collect()
+}
+
+fn privacy_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    use super::required_reason::{Category, ManifestProblem, listed_sdk, manifest_problems};
+
+    for manifest in &app.privacy_manifests {
+        for problem in manifest_problems(manifest) {
+            let rule = match problem {
+                ManifestProblem::InvalidReason { .. } => AppRule::PrivacyReasonInvalid,
+                _ => AppRule::PrivacyManifestInvalid,
+            };
+            findings.push(AppFinding {
+                rule,
+                location: manifest.path.clone(),
+                subject: None,
+                detail: problem.to_string(),
+            });
+        }
+        if let Some(problem) = &manifest.problem {
+            findings.push(AppFinding {
+                rule: AppRule::PrivacyManifestInvalid,
+                location: manifest.path.clone(),
+                subject: None,
+                detail: format!("the manifest cannot be read as a property list: {problem}"),
+            });
+        }
+    }
+    for binary in &app.binaries {
+        if binary.required_reason_apis.is_empty() {
+            continue;
+        }
+        let directory = owning_bundle(app, &binary.path);
+        let mut manifests = covering_manifests(app, directory);
+        // Extensions: Apple documents no manifest placement for them, so the app's manifests
+        // count too rather than report an undocumented requirement.
+        if directory.ends_with(".appex/") {
+            manifests.extend(covering_manifests(app, &app.path));
+        }
+        let declared: Vec<Category> = manifests
+            .iter()
+            .flat_map(|manifest| &manifest.accessed_api_types)
+            .filter_map(|entry| entry.category.as_deref().and_then(Category::of_key))
+            .collect();
+        for category in Category::ALL {
+            let uses: Vec<&super::required_reason::ApiUse> = binary
+                .required_reason_apis
+                .iter()
+                .filter(|api| api.category == category)
+                .collect();
+            if uses.is_empty() || declared.contains(&category) {
+                continue;
+            }
+            let evidence: Vec<&str> = uses.iter().map(|api| api.evidence.as_str()).collect();
+            let covering = if manifests.is_empty() {
+                format!("no privacy manifest covers {directory}")
+            } else {
+                format!(
+                    "{} does not declare it",
+                    manifests
+                        .iter()
+                        .map(|manifest| manifest.path.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            findings.push(AppFinding {
+                rule: AppRule::RequiredReasonUndeclared,
+                location: binary.path.clone(),
+                subject: Some(category.key().to_owned()),
+                detail: format!(
+                    "uses {} ({}); {covering}",
+                    uses.iter()
+                        .map(|api| api.api)
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    evidence.join(", ")
+                ),
+            });
+        }
+    }
+    for component in &app.components {
+        let Some(name) = component
+            .path
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .and_then(|last| last.strip_suffix(".framework"))
+        else {
+            continue;
+        };
+        let Some(sdk) = listed_sdk(name) else {
+            continue;
+        };
+        let has_manifest = app
+            .privacy_manifests
+            .iter()
+            .any(|manifest| manifest.path.starts_with(component.path.as_str()));
+        if !has_manifest {
+            findings.push(AppFinding {
+                rule: AppRule::SdkPrivacyManifestMissing,
+                location: component.path.clone(),
+                subject: Some(sdk.to_owned()),
+                detail: format!(
+                    "{sdk} is on Apple's list of commonly used third-party SDKs, which must \
+                     ship their own privacy manifest; {} has none",
+                    component.path
+                ),
+            });
+        }
+    }
 }
 
 fn profile_checks(app: &AppBundle, today: &str, findings: &mut Vec<AppFinding>) {

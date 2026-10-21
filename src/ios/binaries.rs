@@ -12,6 +12,7 @@
 
 use std::io::{Read, Seek};
 
+use super::required_reason::{ApiUse, apis_in};
 use crate::archive::ZipArchive;
 use crate::macho::signature::{
     CodeSignature, SLOT_DER_ENTITLEMENTS, SLOT_ENTITLEMENTS, SLOT_INFO_PLIST, SLOT_REQUIREMENTS,
@@ -46,6 +47,8 @@ pub struct BundleBinary {
     pub macho: Result<MachFile, String>,
     /// The signature checks of each slice, in slice order (empty when not read).
     pub signatures: Vec<SignatureCheck>,
+    /// The required-reason APIs any slice uses (see [`super::required_reason`]).
+    pub required_reason_apis: Vec<ApiUse>,
 }
 
 impl BundleBinary {
@@ -139,6 +142,7 @@ pub(super) fn read_binary<R: Read + Seek>(
         size: 0,
         macho: Err("not in the archive".to_owned()),
         signatures: Vec::new(),
+        required_reason_apis: Vec::new(),
     };
     let Some(entry) = archive.find(path) else {
         return binary;
@@ -189,6 +193,7 @@ impl BundleBinary {
             size: bytes.len() as u64,
             macho: Err(String::new()),
             signatures: Vec::new(),
+            required_reason_apis: Vec::new(),
         };
         let file = match parse(bytes) {
             Ok(file) => file,
@@ -210,10 +215,30 @@ impl BundleBinary {
                 info_plist,
                 resources,
             ));
+            binary.required_reason_apis.extend(apis_in(
+                image,
+                section(image, slice_bytes, "__objc_methname"),
+            ));
         }
+        binary
+            .required_reason_apis
+            .sort_by(|left, right| (left.category, left.api).cmp(&(right.category, right.api)));
+        binary.required_reason_apis.dedup();
         binary.macho = Ok(file);
         binary
     }
+}
+
+/// A `__TEXT` section's bytes within its slice, when the slice holds them.
+fn section<'data>(image: &MachO, slice: &'data [u8], name: &str) -> Option<&'data [u8]> {
+    let section = image
+        .segments
+        .iter()
+        .flat_map(|segment| &segment.sections)
+        .find(|section| section.segment == "__TEXT" && section.name == name)?;
+    let start = usize::try_from(section.offset).ok()?;
+    let size = usize::try_from(section.size).ok()?;
+    slice.get(start..start.checked_add(size)?)
 }
 
 fn check(

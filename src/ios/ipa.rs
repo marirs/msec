@@ -6,6 +6,7 @@ use std::io::{Read, Seek};
 use super::ats::TransportSecurity;
 use super::binaries::{BinaryRole, BundleBinary, read_binary};
 use super::info::BundleInfo;
+use super::privacy::PrivacyManifest;
 use super::profile::{ProfileError, ProvisioningProfile};
 use crate::archive::{ArchiveError, ZipArchive};
 use crate::plist::{self, Plist, PlistError};
@@ -175,20 +176,6 @@ impl ComponentKind {
     }
 }
 
-/// A privacy manifest found in the bundle.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PrivacyManifest {
-    /// Its path in the archive.
-    pub path: String,
-    /// Why it could not be read as a plist, when it could not.
-    pub problem: Option<String>,
-    /// `NSPrivacyTracking`: the code this manifest covers uses data for tracking.
-    pub tracking: Option<bool>,
-    /// `NSPrivacyTrackingDomains`: the domains it connects to for tracking, which iOS blocks
-    /// until the user allows tracking.
-    pub tracking_domains: Vec<String>,
-}
-
 impl Ipa {
     /// Reads an IPA: locates the app bundle and reads what it declares.
     pub fn read<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Self {
@@ -312,25 +299,11 @@ fn read_app_bundle<R: Read + Seek>(
                 Ok(parsed) => (None, Some(parsed.root)),
                 Err(problem) => (Some(problem), None),
             };
-            let dictionary = root.as_ref().and_then(plist::Value::as_dictionary);
-            PrivacyManifest {
-                path: manifest,
-                problem,
-                tracking: dictionary
-                    .and_then(|dictionary| dictionary.get("NSPrivacyTracking"))
-                    .and_then(plist::Value::as_bool),
-                tracking_domains: dictionary
-                    .and_then(|dictionary| dictionary.get("NSPrivacyTrackingDomains"))
-                    .and_then(plist::Value::as_array)
-                    .map(|domains| {
-                        domains
-                            .iter()
-                            .filter_map(plist::Value::as_str)
-                            .map(str::to_owned)
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            }
+            PrivacyManifest::read(
+                manifest,
+                root.as_ref()
+                    .ok_or_else(|| problem.clone().unwrap_or_default()),
+            )
         })
         .collect();
     let localizations: BTreeSet<String> = inside

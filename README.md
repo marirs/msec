@@ -62,8 +62,8 @@ Ported in this order, each step checked against MobSF v4.5.3 reports on a fixed 
 4. iOS: property lists read as Core Foundation reads them, the IPA's app bundle, Mach-O
    (load commands, symbols, hardening, code signatures with hash verification) for every
    executable in it, provisioning profiles, App Transport Security and the signing
-   certificate chain (done); privacy manifests and required-reason APIs, App Store readiness,
-   Objective-C metadata (next).
+   certificate chain, DER entitlements, privacy manifests and required-reason APIs (done); App
+   Store readiness, Objective-C metadata (next).
 5. Malware indicators: domain checks, APKiD rules via yara-x.
 6. Remaining inputs (XAPK, APKS, AAB, JAR, AAR, SO), then dynamic analysis.
 

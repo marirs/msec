@@ -15,8 +15,11 @@ pub mod ats;
 mod binaries;
 mod info;
 mod ipa;
+pub mod privacy;
 pub mod profile;
+pub mod required_reason;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
 pub use info::{BundleInfo, WrongType};
-pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem, PrivacyManifest};
+pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem};
+pub use privacy::{AccessedApiType, CollectedDataType, PrivacyManifest};
