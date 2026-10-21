@@ -12,6 +12,7 @@
 
 use std::io::{Read, Seek};
 
+use super::purpose_strings::{ResourceUse, uses_in};
 use super::required_reason::{ApiUse, apis_in};
 use crate::archive::ZipArchive;
 use crate::macho::signature::{
@@ -49,6 +50,9 @@ pub struct BundleBinary {
     pub signatures: Vec<SignatureCheck>,
     /// The required-reason APIs any slice uses (see [`super::required_reason`]).
     pub required_reason_apis: Vec<ApiUse>,
+    /// The protected resources any slice's code uses, by imports and method names (see
+    /// [`super::purpose_strings`]; entitlements are read from [`Self::entitlements`]).
+    pub protected_resource_uses: Vec<ResourceUse>,
     /// `__TEXT` sections msec reads (`__cstring`, `__objc_methname`) that the App Store
     /// encrypted in some slice (FairPlay), sorted: what they hold was not read, so the checks
     /// that read them are incomplete for this executable.
@@ -147,6 +151,7 @@ pub(super) fn read_binary<R: Read + Seek>(
         macho: Err("not in the archive".to_owned()),
         signatures: Vec::new(),
         required_reason_apis: Vec::new(),
+        protected_resource_uses: Vec::new(),
         encrypted_sections: Vec::new(),
     };
     let Some(entry) = archive.find(path) else {
@@ -199,6 +204,7 @@ impl BundleBinary {
             macho: Err(String::new()),
             signatures: Vec::new(),
             required_reason_apis: Vec::new(),
+            protected_resource_uses: Vec::new(),
             encrypted_sections: Vec::new(),
         };
         let file = match parse(bytes) {
@@ -235,7 +241,14 @@ impl BundleBinary {
             binary
                 .required_reason_apis
                 .extend(apis_in(image, method_names));
+            binary
+                .protected_resource_uses
+                .extend(uses_in(image, method_names));
         }
+        binary.protected_resource_uses.sort();
+        binary
+            .protected_resource_uses
+            .dedup_by_key(|resource_use| resource_use.requirement);
         binary
             .required_reason_apis
             .sort_by(|left, right| (left.category, left.api).cmp(&(right.category, right.api)));

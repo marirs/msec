@@ -115,7 +115,8 @@ fn what_encryption_hides_is_unchecked_not_clean() {
     let main = &app.binaries[0];
     let parts: Vec<(UncheckedCheck, UncheckedCause, bool)> = unchecked(app)
         .iter()
-        .map(|part| (part.check, part.cause, part.binary == main.path))
+        .filter(|part| part.cause == UncheckedCause::Encrypted)
+        .map(|part| (part.check, part.cause, part.location == main.path))
         .collect();
     assert_eq!(
         parts,
@@ -130,9 +131,13 @@ fn what_encryption_hides_is_unchecked_not_clean() {
     assert!(!analyse_binaries(app).iter().any(|finding| finding.rule
         == BinaryRule::SignatureMismatch
         && finding.binary == main.path));
-    // The unencrypted original has nothing unchecked.
+    // The unencrypted original has nothing encrypted.
     let (_, plain) = open("privacy.ipa");
-    assert!(unchecked(plain.app.as_ref().unwrap()).is_empty());
+    assert!(
+        unchecked(plain.app.as_ref().unwrap())
+            .iter()
+            .all(|part| part.cause != UncheckedCause::Encrypted)
+    );
 }
 
 /// The secret and tracker scans name the encrypted executable as unread, by cause.

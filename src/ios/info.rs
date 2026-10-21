@@ -42,7 +42,7 @@ pub struct BundleInfo {
     pub queried_schemes: Vec<String>,
     /// `UIBackgroundModes`.
     pub background_modes: Vec<String>,
-    /// Purpose strings for protected resources: every top-level `NS...UsageDescription` key
+    /// Purpose strings for protected resources: every top-level `...UsageDescription` key
     /// with its text, sorted by key.
     pub usage_descriptions: Vec<(String, String)>,
     /// `ITSAppUsesNonExemptEncryption`.
@@ -225,7 +225,8 @@ impl Reader<'_> {
     fn usage_descriptions(&mut self) -> Vec<(String, String)> {
         let mut descriptions: Vec<(String, String)> = Vec::new();
         for (key, value) in self.dictionary.iter() {
-            if !(key.starts_with("NS") && key.ends_with("UsageDescription")) {
+            // NFCReaderUsageDescription is the one purpose string without the NS prefix.
+            if !key.ends_with("UsageDescription") {
                 continue;
             }
             match value.as_str() {

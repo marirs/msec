@@ -504,6 +504,18 @@ pub enum AppRule {
     /// declares: a development certificate on an App Store, ad hoc or in-house build, or a
     /// distribution certificate on a development build (msec).
     CertificateDistributionMismatch,
+    /// Code uses a protected resource (by class, method or entitlement) and its bundle's
+    /// `Info.plist` has no usable purpose string for it: the request fails or the app is
+    /// terminated, and App Store Connect flags the build (ITMS-90683) (msec).
+    PurposeStringMissing,
+    /// A privacy manifest declares tracking and no executable uses App Tracking Transparency to
+    /// ask for permission (App Review guideline 5.1.2) (msec).
+    TrackingWithoutAtt,
+    /// The build misses an upload requirement in force: the SDK it was built with, or the
+    /// lowest iOS version it targets (msec).
+    UploadRequirementUnmet,
+    /// The build misses an upload requirement Apple has announced (msec).
+    UploadRequirementUpcoming,
     /// `NSAllowsArbitraryLoads` is in effect: ATS is off for every connection (MobSF).
     AtsArbitraryLoads,
     /// `NSAllowsArbitraryLoads` is set but iOS 10+ ignores it, because a narrower key is
@@ -540,6 +552,10 @@ impl AppRule {
             Self::RequiredReasonUndeclared => "msec_ios_required_reason_undeclared",
             Self::SdkPrivacyManifestMissing => "msec_ios_sdk_privacy_manifest_missing",
             Self::CertificateDistributionMismatch => "msec_ios_certificate_distribution_mismatch",
+            Self::PurposeStringMissing => "msec_ios_purpose_string_missing",
+            Self::TrackingWithoutAtt => "msec_ios_tracking_without_att",
+            Self::UploadRequirementUnmet => "msec_ios_upload_requirement_unmet",
+            Self::UploadRequirementUpcoming => "msec_ios_upload_requirement_upcoming",
             Self::AtsArbitraryLoads => "msec_ios_ats_arbitrary_loads",
             Self::AtsArbitraryLoadsIgnored => "msec_ios_ats_arbitrary_loads_ignored",
             Self::AtsWebContent => "msec_ios_ats_web_content",
@@ -565,12 +581,16 @@ impl AppRule {
             | Self::RequiredReasonUndeclared
             | Self::SdkPrivacyManifestMissing
             | Self::CertificateDistributionMismatch
+            | Self::PurposeStringMissing
+            | Self::TrackingWithoutAtt
+            | Self::UploadRequirementUnmet
             | Self::AtsArbitraryLoads
             | Self::AtsInsecureHttpDomain
             | Self::AtsWeakTlsDomain => Severity::High,
-            Self::AtsWebContent | Self::AtsMedia | Self::AtsForwardSecrecyDisabled => {
-                Severity::Warning
-            }
+            Self::AtsWebContent
+            | Self::AtsMedia
+            | Self::AtsForwardSecrecyDisabled
+            | Self::UploadRequirementUpcoming => Severity::Warning,
             Self::ProfileDistribution
             | Self::AtsArbitraryLoadsIgnored
             | Self::AtsLocalNetworking => Severity::Info,
@@ -612,7 +632,163 @@ pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
     ats_checks(app, &mut findings);
     privacy_checks(app, &mut findings);
     certificate_use_checks(app, &mut findings);
+    purpose_string_checks(app, &mut findings);
+    tracking_checks(app, &mut findings);
+    upload_requirement_checks(app, today, &mut findings);
     findings
+}
+
+/// The bundle whose `Info.plist` holds the purpose strings for an executable's code: the
+/// innermost app extension, watch app or App Clip containing it, else the app. Frameworks
+/// run in the process that loads them, whose bundle's purpose strings iOS shows.
+pub(super) fn purpose_bundle<'app>(
+    app: &'app AppBundle,
+    binary: &str,
+) -> (&'app str, Option<&'app super::BundleInfo>) {
+    let relative = binary.strip_prefix(app.path.as_str()).unwrap_or(binary);
+    let mut owner: Option<&str> = None;
+    let mut offset = 0;
+    for part in relative.split('/') {
+        offset += part.len() + 1;
+        if part.ends_with(".appex") || part.ends_with(".app") {
+            owner = binary.get(..app.path.len() + offset);
+        }
+    }
+    match owner.and_then(|directory| {
+        app.components
+            .iter()
+            .find(|component| component.path == directory)
+    }) {
+        Some(component) => (component.path.as_str(), component.info.as_ref()),
+        None => (app.path.as_str(), app.info.as_ref()),
+    }
+}
+
+/// Each protected resource some executable's code uses must have a purpose string in the
+/// `Info.plist` of the bundle it runs in (see [`super::purpose_strings`]). One finding per
+/// bundle and resource, naming the first executable seen using it. A bundle whose
+/// `Info.plist` was not read is not judged.
+fn purpose_string_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    use super::purpose_strings::{entitlement_uses, purpose_problem};
+    use std::collections::BTreeMap;
+
+    let mut used: BTreeMap<(&str, usize), (String, String, usize)> = BTreeMap::new();
+    for binary in &app.binaries {
+        let mut uses = binary.protected_resource_uses.clone();
+        if let Some(entitlements) = binary
+            .entitlements()
+            .and_then(|plist| plist.as_ref().ok())
+            .and_then(|plist| plist.root.as_dictionary())
+        {
+            uses.extend(entitlement_uses(entitlements));
+        }
+        let (directory, _) = purpose_bundle(app, &binary.path);
+        for resource_use in uses {
+            let relative = binary
+                .path
+                .strip_prefix(app.path.as_str())
+                .unwrap_or(&binary.path)
+                .to_owned();
+            used.entry((directory, resource_use.requirement))
+                .and_modify(|(.., others)| *others += 1)
+                .or_insert((relative, resource_use.evidence, 0));
+        }
+    }
+    for ((directory, requirement), (binary, evidence, others)) in used {
+        let Some(info) = purpose_bundle(app, directory).1 else {
+            continue;
+        };
+        let requirement = &super::purpose_strings::REQUIREMENTS[requirement];
+        let Some(problem) =
+            purpose_problem(requirement, &info.usage_descriptions, &info.wrong_types)
+        else {
+            continue;
+        };
+        let more = match others {
+            0 => String::new(),
+            1 => " (and 1 more executable)".to_owned(),
+            count => format!(" (and {count} more executables)"),
+        };
+        findings.push(AppFinding {
+            rule: AppRule::PurposeStringMissing,
+            location: format!("{directory}Info.plist"),
+            subject: Some(requirement.keys[0].to_owned()),
+            detail: format!(
+                "{problem}; {binary}{more} uses {} ({evidence})",
+                requirement.resource
+            ),
+        });
+    }
+}
+
+/// A privacy manifest that declares tracking (`NSPrivacyTracking`, or a collected data type
+/// used for tracking) commits the app to asking first through App Tracking Transparency.
+/// When no executable references `ATTrackingManager`, nothing in the app can ask. The class
+/// reference is read from the symbol table, which App Store encryption leaves readable.
+fn tracking_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    let asks = app
+        .binaries
+        .iter()
+        .flat_map(|binary| binary.images())
+        .any(|image| image.imports("_OBJC_CLASS_$_ATTrackingManager"));
+    if asks {
+        return;
+    }
+    for manifest in &app.privacy_manifests {
+        let declared = if manifest.tracking == Some(true) {
+            "NSPrivacyTracking is true".to_owned()
+        } else if let Some(entry) = manifest
+            .collected_data_types
+            .iter()
+            .find(|entry| entry.tracking == Some(true))
+        {
+            format!(
+                "{} is collected for tracking",
+                entry.data_type.as_deref().unwrap_or("a data type")
+            )
+        } else {
+            continue;
+        };
+        findings.push(AppFinding {
+            rule: AppRule::TrackingWithoutAtt,
+            location: manifest.path.clone(),
+            subject: None,
+            detail: format!(
+                "{declared}, but no executable uses App Tracking Transparency                  (ATTrackingManager) to ask the user's permission, which tracking requires"
+            ),
+        });
+    }
+}
+
+/// The app's SDK and minimum iOS version against App Store Connect's upload requirements on
+/// `today` (see [`super::upload_requirements`]). Missing keys are not findings: they are
+/// reported as unchecked by [`super::coverage::unchecked`].
+fn upload_requirement_checks(app: &AppBundle, today: &str, findings: &mut Vec<AppFinding>) {
+    let Some(info) = &app.info else {
+        return;
+    };
+    let Ok(problems) = super::upload_requirements::upload_problems(info, today) else {
+        return;
+    };
+    for problem in problems {
+        findings.push(AppFinding {
+            rule: if problem.in_force {
+                AppRule::UploadRequirementUnmet
+            } else {
+                AppRule::UploadRequirementUpcoming
+            },
+            location: format!("{}Info.plist", app.path),
+            // The required version is part of the subject: a stricter requirement is a new
+            // finding, not the old one changed.
+            subject: Some(format!(
+                "{} {}.{}",
+                problem.constraint.key(),
+                problem.required.0,
+                problem.required.1
+            )),
+            detail: problem.to_string(),
+        });
+    }
 }
 
 /// The signing certificate must fit the distribution method the provisioning profile declares:

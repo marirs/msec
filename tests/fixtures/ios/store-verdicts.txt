@@ -1,0 +1,12 @@
+Fixture:
+  import AVMediaTypeVideo
+  import AVCaptureDevice
+  import CLLocationManager
+  import CMPedometer
+  import CNContactStore
+  selector requestWhenInUseAuthorization
+  entitlement com.apple.developer.healthkit
+Frameworks/Lib.framework/Lib:
+  import CBCentralManager
+PlugIns/Share.appex/Share:
+  import SFSpeechRecognizer

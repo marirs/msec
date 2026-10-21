@@ -287,7 +287,7 @@ fn unverified_signers_are_unchecked() {
         let found = parts.iter().any(|part| {
             part.check == UncheckedCheck::SignerSignature
                 && part.cause == UncheckedCause::UnsupportedAlgorithm
-                && part.binary.ends_with("/Fixture")
+                && part.location.ends_with("/Fixture")
         });
         assert_eq!(found, expected, "{variant}: {parts:?}");
     }

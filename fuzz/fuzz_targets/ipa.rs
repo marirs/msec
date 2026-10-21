@@ -1,7 +1,8 @@
 //! The IPA reader: locating the app bundle, its Info.plist and those of its components, and
 //! the privacy manifests, then the analysis (signers, entitlements, profile, ATS, privacy
-//! manifests and required-reason APIs), what it could not check (encrypted executables,
-//! unverified signers) and the secret and tracker scans, on whatever archive libFuzzer makes.
+//! manifests and required-reason APIs, purpose strings, tracking and upload requirements),
+//! what it could not check (encrypted executables, unverified signers, unrecorded build keys)
+//! and the secret and tracker scans, on whatever archive libFuzzer makes.
 #![no_main]
 
 use std::io::Cursor;

@@ -2,12 +2,16 @@
 //! APPCHK: a limitation is a check msec does not have; this is a check msec has that could not
 //! run on some part of this app). A rule fed by an unchecked part is incomplete, not clean.
 //!
-//! Two causes exist:
+//! Four causes exist:
 //! - the App Store encrypted an executable (FairPlay, `cryptid` set): its code pages cannot be
 //!   hashed, and the `__TEXT` sections msec reads (Objective-C method names, C strings) are
 //!   ciphertext. Load commands, imports and the code signature stay readable;
 //! - a code signature or certificate uses an algorithm or key type msec does not verify: the
-//!   signer was neither confirmed nor refuted.
+//!   signer was neither confirmed nor refuted;
+//! - `Info.plist` does not record what a check reads (`DTSDKName`, `MinimumOSVersion` for the
+//!   upload requirements);
+//! - the `Info.plist` a check reads could not be read (purpose strings of a bundle whose code
+//!   uses a protected resource).
 //!
 //! The C strings of an encrypted executable feed the secret and tracker scans, which report
 //! the executable through [`crate::package_strings::Visitor::encrypted`]; they are listed here
@@ -23,8 +27,8 @@ pub struct Unchecked {
     pub check: UncheckedCheck,
     /// Why.
     pub cause: UncheckedCause,
-    /// The executable's path in the archive.
-    pub binary: String,
+    /// The file concerned: the executable, or `Info.plist` for what it does not record.
+    pub location: String,
     /// The slice, for universal executables.
     pub architecture: Option<String>,
     /// What was not checked and why, in words.
@@ -44,6 +48,10 @@ pub enum UncheckedCheck {
     SignerSignature,
     /// The certificate chain's links up to Apple's root.
     CertificateChain,
+    /// App Store Connect's upload requirements (the SDK and the minimum iOS version).
+    UploadRequirements,
+    /// Purpose strings for the protected resources a bundle's code uses.
+    PurposeStrings,
 }
 
 impl UncheckedCheck {
@@ -53,7 +61,10 @@ impl UncheckedCheck {
     pub fn keys(self) -> Vec<&'static str> {
         match self {
             Self::PageHashes => vec![BinaryRule::SignatureMismatch.key()],
-            Self::MethodNames => vec![AppRule::RequiredReasonUndeclared.key()],
+            Self::MethodNames => vec![
+                AppRule::RequiredReasonUndeclared.key(),
+                AppRule::PurposeStringMissing.key(),
+            ],
             Self::Strings => Vec::new(),
             Self::SignerSignature => vec![
                 BinaryRule::CmsSignatureInvalid.key(),
@@ -63,6 +74,11 @@ impl UncheckedCheck {
                 AppRule::CertificateDistributionMismatch.key(),
             ],
             Self::CertificateChain => vec![BinaryRule::SignerNotApple.key()],
+            Self::UploadRequirements => vec![
+                AppRule::UploadRequirementUnmet.key(),
+                AppRule::UploadRequirementUpcoming.key(),
+            ],
+            Self::PurposeStrings => vec![AppRule::PurposeStringMissing.key()],
         }
     }
 }
@@ -74,16 +90,82 @@ pub enum UncheckedCause {
     Encrypted,
     /// An algorithm or key type msec does not verify.
     UnsupportedAlgorithm,
+    /// The app does not record what the check reads.
+    NotRecorded,
+    /// The property list the check reads could not be read.
+    PropertyListUnreadable,
 }
 
-/// Everything msec's checks could not examine in `app`, by executable, then slice.
+/// Everything msec's checks could not examine in `app`: by executable, then slice, then
+/// what `Info.plist` does not record.
 pub fn unchecked(app: &AppBundle) -> Vec<Unchecked> {
     let mut found = Vec::new();
     for binary in &app.binaries {
         encrypted_parts(binary, &mut found);
         unverified_signers(binary, &mut found);
     }
+    unrecorded_build(app, &mut found);
+    unread_purpose_strings(app, &mut found);
     found
+}
+
+/// Bundles whose code uses a protected resource but whose `Info.plist` was not read: their
+/// purpose strings were not checked.
+fn unread_purpose_strings(app: &AppBundle, found: &mut Vec<Unchecked>) {
+    let mut reported: Vec<&str> = Vec::new();
+    for binary in &app.binaries {
+        let uses_resources = !binary.protected_resource_uses.is_empty()
+            || binary
+                .entitlements()
+                .and_then(|plist| plist.as_ref().ok())
+                .and_then(|plist| plist.root.as_dictionary())
+                .is_some_and(|entitlements| {
+                    !super::purpose_strings::entitlement_uses(entitlements).is_empty()
+                });
+        if !uses_resources {
+            continue;
+        }
+        let (directory, info) = super::analysis::purpose_bundle(app, &binary.path);
+        if info.is_some() || reported.contains(&directory) {
+            continue;
+        }
+        reported.push(directory);
+        found.push(Unchecked {
+            check: UncheckedCheck::PurposeStrings,
+            cause: UncheckedCause::PropertyListUnreadable,
+            location: format!("{directory}Info.plist"),
+            architecture: None,
+            detail: format!(
+                "{} uses protected resources, but this Info.plist was not read: its purpose \
+                 strings were not checked",
+                binary
+                    .path
+                    .strip_prefix(app.path.as_str())
+                    .unwrap_or(&binary.path)
+            ),
+        });
+    }
+}
+
+/// The upload requirements need the SDK and minimum iOS version Xcode writes into
+/// `Info.plist`. The day does not matter for whether they can be checked.
+fn unrecorded_build(app: &AppBundle, found: &mut Vec<Unchecked>) {
+    let Some(info) = &app.info else {
+        return;
+    };
+    if let Err(missing) = super::upload_requirements::upload_problems(info, "") {
+        found.push(Unchecked {
+            check: UncheckedCheck::UploadRequirements,
+            cause: UncheckedCause::NotRecorded,
+            location: format!("{}Info.plist", app.path),
+            architecture: None,
+            detail: format!(
+                "Info.plist does not record {}, which Xcode writes: App Store Connect's upload \
+                 requirements were not checked",
+                missing.keys.join(" or ")
+            ),
+        });
+    }
 }
 
 fn encrypted_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
@@ -110,7 +192,7 @@ fn encrypted_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
             found.push(Unchecked {
                 check: UncheckedCheck::PageHashes,
                 cause: UncheckedCause::Encrypted,
-                binary: binary.path.clone(),
+                location: binary.path.clone(),
                 architecture,
                 detail: "the App Store encrypted the code pages: their hashes cannot be checked"
                     .to_owned(),
@@ -135,7 +217,7 @@ fn encrypted_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
         found.push(Unchecked {
             check,
             cause: UncheckedCause::Encrypted,
-            binary: binary.path.clone(),
+            location: binary.path.clone(),
             architecture: None,
             detail: what.to_owned(),
         });
@@ -153,7 +235,7 @@ fn unverified_signers(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
             Err(problem) if problem.unsupported() => found.push(Unchecked {
                 check: UncheckedCheck::SignerSignature,
                 cause: UncheckedCause::UnsupportedAlgorithm,
-                binary: binary.path.clone(),
+                location: binary.path.clone(),
                 architecture,
                 detail: format!(
                     "the CMS signature was not verified ({problem}): who signed the code, its \
@@ -163,7 +245,7 @@ fn unverified_signers(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
             Ok(()) if signer.anchor_unverified() => found.push(Unchecked {
                 check: UncheckedCheck::CertificateChain,
                 cause: UncheckedCause::UnsupportedAlgorithm,
-                binary: binary.path.clone(),
+                location: binary.path.clone(),
                 architecture,
                 detail: "the certificate chain ends at Apple's root, but a link uses an \
                          algorithm that was not verified: whether Apple issued the certificate \

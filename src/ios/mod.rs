@@ -18,7 +18,9 @@ mod info;
 mod ipa;
 pub mod privacy;
 pub mod profile;
+pub mod purpose_strings;
 pub mod required_reason;
+pub mod upload_requirements;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
 pub use info::{BundleInfo, WrongType};
