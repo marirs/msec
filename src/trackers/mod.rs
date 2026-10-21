@@ -202,6 +202,15 @@ impl Visitor for Hosts {
         self.skipped.push(Unread {
             path: path.to_owned(),
             reason: reason.to_owned(),
+            encrypted: false,
+        });
+    }
+
+    fn encrypted(&mut self, path: &str) {
+        self.skipped.push(Unread {
+            path: path.to_owned(),
+            reason: crate::package_strings::ENCRYPTED_REASON.to_owned(),
+            encrypted: true,
         });
     }
 }

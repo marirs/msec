@@ -391,13 +391,20 @@ fn signer_problems(check: &super::SignatureCheck, signer: &Signer) -> Vec<(Binar
         .as_deref()
         .unwrap_or("an unnamed certificate");
     if let Err(problem) = &signer.signature {
+        // An algorithm msec does not verify is not a failed signature: the signer checks did
+        // not run, which `coverage::unchecked` reports so the rules stay incomplete.
+        if problem.unsupported() {
+            return Vec::new();
+        }
         return vec![(
             BinaryRule::CmsSignatureInvalid,
             format!("the CMS signature by {named} does not verify: {problem}"),
         )];
     }
     let mut problems = Vec::new();
-    if !signer.apple_anchored {
+    // A chain that reaches Apple's root through a link msec cannot verify is unchecked, not
+    // broken (`coverage::unchecked`).
+    if !signer.apple_anchored && !signer.anchor_unverified() {
         let broken = signer
             .chain
             .iter()
@@ -493,6 +500,10 @@ pub enum AppRule {
     /// A framework on Apple's list of commonly used third-party SDKs ships no privacy
     /// manifest (App Store Connect: ITMS-91061) (msec).
     SdkPrivacyManifestMissing,
+    /// The signing certificate does not fit the distribution method the provisioning profile
+    /// declares: a development certificate on an App Store, ad hoc or in-house build, or a
+    /// distribution certificate on a development build (msec).
+    CertificateDistributionMismatch,
     /// `NSAllowsArbitraryLoads` is in effect: ATS is off for every connection (MobSF).
     AtsArbitraryLoads,
     /// `NSAllowsArbitraryLoads` is set but iOS 10+ ignores it, because a narrower key is
@@ -528,6 +539,7 @@ impl AppRule {
             Self::PrivacyReasonInvalid => "msec_ios_privacy_reason_invalid",
             Self::RequiredReasonUndeclared => "msec_ios_required_reason_undeclared",
             Self::SdkPrivacyManifestMissing => "msec_ios_sdk_privacy_manifest_missing",
+            Self::CertificateDistributionMismatch => "msec_ios_certificate_distribution_mismatch",
             Self::AtsArbitraryLoads => "msec_ios_ats_arbitrary_loads",
             Self::AtsArbitraryLoadsIgnored => "msec_ios_ats_arbitrary_loads_ignored",
             Self::AtsWebContent => "msec_ios_ats_web_content",
@@ -552,6 +564,7 @@ impl AppRule {
             | Self::PrivacyReasonInvalid
             | Self::RequiredReasonUndeclared
             | Self::SdkPrivacyManifestMissing
+            | Self::CertificateDistributionMismatch
             | Self::AtsArbitraryLoads
             | Self::AtsInsecureHttpDomain
             | Self::AtsWeakTlsDomain => Severity::High,
@@ -598,7 +611,75 @@ pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
     profile_checks(app, today, &mut findings);
     ats_checks(app, &mut findings);
     privacy_checks(app, &mut findings);
+    certificate_use_checks(app, &mut findings);
     findings
+}
+
+/// The signing certificate must fit the distribution method the provisioning profile declares:
+/// development certificates sign development builds; App Store, ad hoc and in-house builds are
+/// signed with a distribution certificate. A development certificate in a development build is
+/// what it should be, not a finding. Without a profile (App Store downloads carry none) the
+/// intended method is unknown, and nothing is reported. Only a signature that verifies counts.
+fn certificate_use_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    use super::profile::ProfileKind;
+    use crate::macho::signer::CertificateUse;
+
+    let (Some(location), Some(Ok(profile)), Some(main)) = (
+        &app.provisioning_profile,
+        &app.profile,
+        app.binaries.first(),
+    ) else {
+        return;
+    };
+    let Some(signer) = main
+        .signatures
+        .first()
+        .and_then(|check| check.signer.as_ref())
+        .filter(|signer| signer.signature.is_ok())
+    else {
+        return;
+    };
+    let kind = profile.kind();
+    let fits = match (kind, signer.certificate_use) {
+        (ProfileKind::Development, CertificateUse::Development)
+        | (
+            ProfileKind::AdHoc | ProfileKind::Enterprise | ProfileKind::AppStore,
+            CertificateUse::Distribution,
+        ) => true,
+        // Apple's App Store re-signing, Developer ID and unrecognised names are not judged
+        // here (a certificate Apple did not issue is AC-IOS-0030's subject).
+        (_, CertificateUse::AppStore | CertificateUse::DeveloperId | CertificateUse::Other) => true,
+        _ => false,
+    };
+    if fits {
+        return;
+    }
+    let named = signer
+        .common_name
+        .clone()
+        .unwrap_or_else(|| "the signing certificate".to_owned());
+    let detail = match kind {
+        ProfileKind::AppStore => format!(
+            "{named}, a development certificate, signed a build whose profile distributes it \
+             through the App Store: App Store Connect accepts only builds signed with a \
+             distribution certificate"
+        ),
+        ProfileKind::AdHoc | ProfileKind::Enterprise => format!(
+            "{named}, a development certificate, signed a build whose profile is for {} \
+             distribution, which uses a distribution certificate",
+            kind.label().to_lowercase()
+        ),
+        ProfileKind::Development => format!(
+            "{named}, a distribution certificate, signed a build whose profile is for \
+             development, which uses a development certificate"
+        ),
+    };
+    findings.push(AppFinding {
+        rule: AppRule::CertificateDistributionMismatch,
+        location: location.clone(),
+        subject: Some(named),
+        detail,
+    });
 }
 
 /// The bundle directory whose privacy manifests cover a binary: a framework's or an app

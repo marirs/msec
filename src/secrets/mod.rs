@@ -412,6 +412,15 @@ impl Visitor for Collector {
         self.scan.skipped.push(Skipped {
             path: path.to_owned(),
             reason: reason.to_owned(),
+            encrypted: false,
+        });
+    }
+
+    fn encrypted(&mut self, path: &str) {
+        self.scan.skipped.push(Skipped {
+            path: path.to_owned(),
+            reason: crate::package_strings::ENCRYPTED_REASON.to_owned(),
+            encrypted: true,
         });
     }
 }

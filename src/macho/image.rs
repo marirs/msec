@@ -288,6 +288,14 @@ impl Encryption {
     pub fn encrypted(&self) -> bool {
         self.id != 0
     }
+
+    /// Whether the encrypted range overlaps `offset..offset + size` (file offsets from the
+    /// image start): bytes there are ciphertext, not what the image holds.
+    pub fn covers(&self, offset: u64, size: u64) -> bool {
+        let start = u64::from(self.offset);
+        let end = start.saturating_add(u64::from(self.size));
+        self.encrypted() && size > 0 && offset < end && offset.saturating_add(size) > start
+    }
 }
 
 /// A `linkedit_data_command`.
@@ -316,6 +324,15 @@ pub struct Symbols {
 }
 
 impl MachO {
+    /// Whether the App Store encrypted some of `section`'s bytes (FairPlay): what it holds
+    /// cannot be read from the package. Zero-fill sections have no bytes to encrypt.
+    pub fn section_encrypted(&self, section: &Section) -> bool {
+        section.offset != 0
+            && self.encryption.is_some_and(|encryption| {
+                encryption.covers(u64::from(section.offset), section.size)
+            })
+    }
+
     /// Reads one image (a thin file, or one slice of a universal file).
     pub fn parse(data: &[u8]) -> Result<Self, MachOError> {
         let magic = read_u32_le(data, 0).ok_or(MachOError::Truncated)?;
@@ -895,4 +912,27 @@ pub fn command_name(command: u32) -> String {
         _ => return format!("{command:#x}"),
     };
     name.to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Encryption;
+
+    #[test]
+    fn the_encrypted_range_covers_only_overlapping_bytes() {
+        let encrypted = Encryption {
+            offset: 0x4000,
+            size: 0x4000,
+            id: 1,
+        };
+        assert!(encrypted.covers(0x4000, 1));
+        assert!(encrypted.covers(0x3fff, 2));
+        assert!(encrypted.covers(0x7fff, 0x100));
+        assert!(!encrypted.covers(0x3000, 0x1000));
+        assert!(!encrypted.covers(0x8000, 0x10));
+        assert!(!encrypted.covers(0x5000, 0));
+        assert!(!encrypted.covers(u64::MAX, u64::MAX));
+        let clear = Encryption { id: 0, ..encrypted };
+        assert!(!clear.covers(0x4000, 0x10));
+    }
 }

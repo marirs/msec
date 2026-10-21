@@ -13,6 +13,7 @@
 pub mod analysis;
 pub mod ats;
 mod binaries;
+pub mod coverage;
 mod info;
 mod ipa;
 pub mod privacy;

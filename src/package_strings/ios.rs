@@ -132,7 +132,9 @@ fn property_list(visitor: &mut impl Visitor, location: &str, root: &Value) {
 }
 
 /// C strings (`__TEXT,__cstring`) of every architecture of an executable, each once; printable
-/// runs of the whole file when it is not Mach-O.
+/// runs of the whole file when it is not Mach-O. A section the App Store encrypted is
+/// ciphertext: it is not read, and the executable is reported as encrypted
+/// ([`Visitor::encrypted`]) so results that needed its strings say they are incomplete.
 fn executable_strings<R: Read + Seek>(
     visitor: &mut impl Visitor,
     archive: &mut ZipArchive<R>,
@@ -147,6 +149,7 @@ fn executable_strings<R: Read + Seek>(
         }
     };
     let mut strings: Vec<String> = Vec::new();
+    let mut encrypted = false;
     match &binary.macho {
         Ok(file) => {
             for slice in &file.slices {
@@ -159,6 +162,10 @@ fn executable_strings<R: Read + Seek>(
                     .flat_map(|segment| &segment.sections)
                     .filter(|section| section.segment == "__TEXT" && section.name == "__cstring");
                 for section in sections {
+                    if image.section_encrypted(section) {
+                        encrypted = true;
+                        continue;
+                    }
                     let start = slice.offset.saturating_add(u64::from(section.offset));
                     let Some(data) = usize::try_from(start)
                         .ok()
@@ -172,6 +179,9 @@ fn executable_strings<R: Read + Seek>(
             }
         }
         Err(_) => strings = printable_runs(&bytes),
+    }
+    if encrypted {
+        visitor.encrypted(&binary.path);
     }
     let mut seen: HashSet<String> = HashSet::new();
     for string in strings {

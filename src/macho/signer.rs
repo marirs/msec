@@ -97,6 +97,17 @@ pub enum SignerProblem {
     Verify(VerifyProblem),
 }
 
+impl SignerProblem {
+    /// The signature uses an algorithm or key type msec does not verify: it was not checked,
+    /// which says nothing about whether it is valid.
+    pub fn unsupported(&self) -> bool {
+        matches!(
+            self,
+            Self::Verify(VerifyProblem::UnsupportedAlgorithm(_) | VerifyProblem::KeyUnsupported)
+        )
+    }
+}
+
 impl std::fmt::Display for SignerProblem {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -193,10 +204,7 @@ impl Signer {
             .as_deref()
             .map(|leaf| chain_from(leaf, &certificates))
             .unwrap_or_default();
-        let anchored_root = chain.last().is_some_and(|last| {
-            APPLE_ROOTS.contains(&last.certificate.sha256.as_str())
-                && last.certificate.subject == last.certificate.issuer
-        });
+        let anchored_root = ends_at_apple_root(&chain);
         let links_verify = chain
             .iter()
             .take(chain.len().saturating_sub(1))
@@ -218,6 +226,27 @@ impl Signer {
     pub fn leaf(&self) -> Option<&CertificateInfo> {
         self.chain.first().map(|link| &link.certificate)
     }
+
+    /// The chain ends at one of Apple's roots and no link fails, but some link uses an
+    /// algorithm or key msec does not verify: whether Apple issued the certificate was not
+    /// established either way.
+    pub fn anchor_unverified(&self) -> bool {
+        let links = &self.chain[..self.chain.len().saturating_sub(1)];
+        !self.apple_anchored
+            && ends_at_apple_root(&self.chain)
+            && links
+                .iter()
+                .all(|link| link.verified_by_next != Some(false))
+            && links.iter().any(|link| link.verified_by_next.is_none())
+    }
+}
+
+/// The chain's last certificate is one of Apple's self-signed roots.
+fn ends_at_apple_root(chain: &[ChainCertificate]) -> bool {
+    chain.last().is_some_and(|last| {
+        APPLE_ROOTS.contains(&last.certificate.sha256.as_str())
+            && last.certificate.subject == last.certificate.issuer
+    })
 }
 
 /// From the leaf up: each next certificate is the one whose subject is the current issuer.
@@ -342,6 +371,47 @@ mod tests {
             assert_eq!(CertificateUse::of(Some(name)), expected, "{name}");
         }
         assert_eq!(CertificateUse::of(None), CertificateUse::Other);
+    }
+
+    /// A chain reaching Apple's root with a link msec cannot verify is unverified, not
+    /// broken; a link that fails, or a root that is not Apple's, decides it.
+    #[test]
+    fn anchors_reached_through_unverified_links() {
+        let read = |name: &str| {
+            let path = format!(
+                "{}/tests/fixtures/ios/certificates/{name}",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            CertificateInfo::from_der(&std::fs::read(path).unwrap()).unwrap()
+        };
+        let mut root = read("root.der");
+        root.sha256 = APPLE_ROOTS[0].to_owned();
+        let link = |certificate: CertificateInfo, verified_by_next| ChainCertificate {
+            certificate,
+            common_name: None,
+            verified_by_next,
+        };
+        let signer = |middle, root: CertificateInfo| Signer {
+            signature: Ok(()),
+            chain: vec![
+                link(read("development.der"), Some(true)),
+                link(read("wwdr.der"), middle),
+                link(root, None),
+            ],
+            unlinked: 0,
+            apple_anchored: false,
+            common_name: None,
+            team_id: None,
+            certificate_use: CertificateUse::Development,
+            signing_time: None,
+        };
+        assert!(signer(None, root.clone()).anchor_unverified());
+        assert!(!signer(Some(false), root.clone()).anchor_unverified());
+        assert!(!signer(None, read("root.der")).anchor_unverified());
+        let mut anchored = signer(Some(true), root);
+        assert!(!anchored.anchor_unverified());
+        anchored.apple_anchored = true;
+        assert!(!anchored.anchor_unverified());
     }
 
     #[test]

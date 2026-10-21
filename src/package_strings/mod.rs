@@ -32,7 +32,14 @@ pub struct Unread {
     pub path: String,
     /// Why.
     pub reason: String,
+    /// It is an executable whose strings the App Store encrypted ([`Visitor::encrypted`]),
+    /// rather than a file too large or unreadable.
+    pub encrypted: bool,
 }
+
+/// Why an encrypted executable's strings were not read.
+pub const ENCRYPTED_REASON: &str =
+    "encrypted by the App Store (FairPlay): its strings cannot be read from the package";
 
 /// Where a string comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -77,6 +84,12 @@ pub trait Visitor {
     fn file(&mut self, _path: &str) {}
     /// A file that should have been read and was not, and why.
     fn skipped(&mut self, path: &str, reason: &str);
+    /// An executable whose strings the App Store encrypted, so they were not read. Readers
+    /// that keep unread files apart by cause override this; by default it is one more file
+    /// not read.
+    fn encrypted(&mut self, path: &str) {
+        self.skipped(path, ENCRYPTED_REASON);
+    }
 }
 
 /// Two visitors fed by one walk.
@@ -106,6 +119,11 @@ impl<A: Visitor, B: Visitor> Visitor for Both<'_, A, B> {
     fn skipped(&mut self, path: &str, reason: &str) {
         self.0.skipped(path, reason);
         self.1.skipped(path, reason);
+    }
+
+    fn encrypted(&mut self, path: &str) {
+        self.0.encrypted(path);
+        self.1.encrypted(path);
     }
 }
 

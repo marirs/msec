@@ -11,7 +11,11 @@
 #   without get-task-allow;
 # - ipa/certificate-not-in-profile.ipa: distribution certificate, an App Store profile that
 #   lists only the development certificate;
+# - ipa/certificate-development-app-store.ipa: development certificate, an App Store profile
+#   that lists it (so only the certificate's use does not fit the distribution method);
 # - ipa/certificate-cms-tampered.ipa: as distribution, one byte of the CMS signature changed;
+# - ipa/certificate-ed25519.ipa: as distribution, signed by an Ed25519 "Apple Distribution"
+#   certificate, an algorithm msec does not verify in code signatures;
 # - ipa/certificate-team-mismatch.ipa: as distribution, the CodeDirectory names another team;
 # - certificate-verdicts.txt: per variant, the authorities and team codesign -dvvv reads, and
 #   codesign --verify's verdict on the bundle;
@@ -38,8 +42,8 @@ printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n
 "$openssl" req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=msec Test Root CA" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -keyout "$work/root.key" -out "$work/root.pem" 2> /dev/null
-issue() { # name, subject, issuer, extensions
-  "$openssl" req -newkey rsa:2048 -nodes -subj "$2" -keyout "$work/$1.key" \
+issue() { # name, subject, issuer, extensions[, key type]
+  "$openssl" req -newkey "${5:-rsa:2048}" -nodes -subj "$2" -keyout "$work/$1.key" \
     -out "$work/$1.csr" 2> /dev/null
   "$openssl" x509 -req -in "$work/$1.csr" -CA "$work/$3.pem" -CAkey "$work/$3.key" \
     -CAcreateserial -days 3650 -extfile "$4" -out "$work/$1.pem" 2> /dev/null
@@ -48,6 +52,7 @@ issue() { # name, subject, issuer, extensions
 issue wwdr "/CN=msec Test Worldwide Developer Relations/OU=G3/O=msec Test/C=US" root "$ca_ext"
 issue development "/CN=Apple Development: msec Fixture (P1Q2R3S4T5)/OU=A1B2C3D4E5/O=msec Fixture/C=US" wwdr "$leaf_ext"
 issue distribution "/CN=Apple Distribution: msec Fixture (A1B2C3D4E5)/OU=A1B2C3D4E5/O=msec Fixture/C=US" wwdr "$leaf_ext"
+issue ed25519 "/CN=Apple Distribution: msec Fixture (A1B2C3D4E5)/OU=A1B2C3D4E5/O=msec Fixture/C=US" wwdr "$leaf_ext" ed25519
 issue profiles "/CN=msec Test Provisioning Profile Signing" root "$leaf_ext"
 cat "$work/wwdr.pem" "$work/root.pem" > "$work/chain.pem"
 rm -rf certificates
@@ -111,6 +116,8 @@ rm -f ipa/certificate-*.ipa
 variant development development development development app/entitlements.plist A1B2C3D4E5
 variant distribution distribution app-store distribution "$work/distribution.entitlements" A1B2C3D4E5
 variant not-in-profile distribution app-store development "$work/distribution.entitlements" A1B2C3D4E5
+variant development-app-store development app-store development "$work/distribution.entitlements" A1B2C3D4E5
 variant cms-tampered distribution app-store distribution "$work/distribution.entitlements" A1B2C3D4E5 --tamper-cms
 variant team-mismatch distribution app-store distribution "$work/distribution.entitlements" Z9Y8X7W6V5
+variant ed25519 ed25519 app-store ed25519 "$work/distribution.entitlements" A1B2C3D4E5 --sha512
 cp "$work/verdicts.txt" certificate-verdicts.txt

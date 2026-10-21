@@ -63,7 +63,7 @@ fn codesign_readings() -> BTreeMap<String, (Vec<String>, String)> {
 #[test]
 fn certificate_chains_match_codesign() {
     let readings = codesign_readings();
-    assert_eq!(readings.len(), 5);
+    assert_eq!(readings.len(), 7);
     for (variant, (authorities, team)) in &readings {
         let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/certificate-{variant}.ipa")));
         let signature = main_signature(&ipa);
@@ -80,6 +80,21 @@ fn certificate_chains_match_codesign() {
             assert_eq!(
                 signer.signature,
                 Err(SignerProblem::Verify(VerifyProblem::SignatureInvalid))
+            );
+            continue;
+        }
+        if variant == "ed25519" {
+            // Neither codesign nor msec verifies an Ed25519 code signature: codesign names no
+            // authority and calls it invalid; msec says it did not verify it, not that it is
+            // invalid (whether iOS accepts it is not established here).
+            assert_eq!(authorities, &["(unavailable)"]);
+            assert!(
+                signer
+                    .signature
+                    .as_ref()
+                    .is_err_and(|problem| problem.unsupported()),
+                "{:?}",
+                signer.signature
             );
             continue;
         }
@@ -158,6 +173,13 @@ fn real_apple_signature() {
         })
         .collect();
     assert!(signer_findings.is_empty(), "{signer_findings:?}");
+    // An Xcode development build is signed "Apple Development" with a development profile:
+    // the certificate fits, so nothing is reported.
+    let mismatch = msec::ios::analysis::analyse_app(ipa.app.as_ref().unwrap(), "2026-10-21")
+        .iter()
+        .any(|finding| {
+            finding.rule == msec::ios::analysis::AppRule::CertificateDistributionMismatch
+        });
     let signature = main_signature(&ipa);
     let signer = signature
         .signer
@@ -167,6 +189,7 @@ fn real_apple_signature() {
     assert_eq!(signer.team_id.as_deref(), Some(team.as_str()));
     assert_eq!(signature.team_id.as_deref(), Some(team.as_str()));
     assert_eq!(signer.chain.len(), 3);
+    assert!(!mismatch);
 }
 
 /// The analysis findings each fixture's signer gives (msec origin): a CMS signature that does
@@ -207,6 +230,8 @@ fn signer_findings() {
             &[BinaryRule::SignerNotApple, BinaryRule::TeamMismatch][..],
             false,
         ),
+        // Not verified: no signer finding either way (coverage::unchecked reports it).
+        ("certificate-ed25519", &[][..], false),
     ] {
         let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/{variant}.ipa")));
         let app = ipa.app.as_ref().unwrap();
@@ -223,5 +248,57 @@ fn signer_findings() {
             .iter()
             .any(|finding| finding.rule == AppRule::ProfileCertificateMismatch);
         assert_eq!(mismatch, profile_mismatch, "{variant}");
+    }
+}
+
+/// The certificate must fit the distribution method the profile declares: a development
+/// certificate in a development build is expected; one on an App Store build is not.
+#[test]
+fn certificates_fit_the_profiles_distribution_method() {
+    use msec::ios::analysis::{AppRule, analyse_app};
+    for (variant, expected) in [
+        ("certificate-development", false),
+        ("certificate-distribution", false),
+        ("certificate-development-app-store", true),
+        ("certificate-cms-tampered", false),
+        ("fixture", false),
+    ] {
+        let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/{variant}.ipa")));
+        let found = analyse_app(ipa.app.as_ref().unwrap(), "2026-10-21")
+            .iter()
+            .any(|finding| finding.rule == AppRule::CertificateDistributionMismatch);
+        assert_eq!(found, expected, "{variant}");
+    }
+}
+
+/// A signature msec does not verify is reported as unchecked, with every rule it feeds; the
+/// signers msec does verify leave nothing unchecked.
+#[test]
+fn unverified_signers_are_unchecked() {
+    use msec::ios::coverage::{UncheckedCause, UncheckedCheck, unchecked};
+    for (variant, expected) in [
+        ("certificate-ed25519", true),
+        ("certificate-distribution", false),
+        ("certificate-cms-tampered", false),
+        ("fixture", false),
+    ] {
+        let ipa = read_ipa(&Path::new(FIXTURES).join(format!("ipa/{variant}.ipa")));
+        let parts = unchecked(ipa.app.as_ref().unwrap());
+        let found = parts.iter().any(|part| {
+            part.check == UncheckedCheck::SignerSignature
+                && part.cause == UncheckedCause::UnsupportedAlgorithm
+                && part.binary.ends_with("/Fixture")
+        });
+        assert_eq!(found, expected, "{variant}: {parts:?}");
+    }
+    let keys = UncheckedCheck::SignerSignature.keys();
+    for rule in [
+        "msec_macho_cms_signature_invalid",
+        "msec_macho_signer_not_apple",
+        "msec_macho_team_mismatch",
+        "msec_ios_profile_certificate_mismatch",
+        "msec_ios_certificate_distribution_mismatch",
+    ] {
+        assert!(keys.contains(&rule), "{rule}");
     }
 }

@@ -49,6 +49,10 @@ pub struct BundleBinary {
     pub signatures: Vec<SignatureCheck>,
     /// The required-reason APIs any slice uses (see [`super::required_reason`]).
     pub required_reason_apis: Vec<ApiUse>,
+    /// `__TEXT` sections msec reads (`__cstring`, `__objc_methname`) that the App Store
+    /// encrypted in some slice (FairPlay), sorted: what they hold was not read, so the checks
+    /// that read them are incomplete for this executable.
+    pub encrypted_sections: Vec<String>,
 }
 
 impl BundleBinary {
@@ -143,6 +147,7 @@ pub(super) fn read_binary<R: Read + Seek>(
         macho: Err("not in the archive".to_owned()),
         signatures: Vec::new(),
         required_reason_apis: Vec::new(),
+        encrypted_sections: Vec::new(),
     };
     let Some(entry) = archive.find(path) else {
         return binary;
@@ -194,6 +199,7 @@ impl BundleBinary {
             macho: Err(String::new()),
             signatures: Vec::new(),
             required_reason_apis: Vec::new(),
+            encrypted_sections: Vec::new(),
         };
         let file = match parse(bytes) {
             Ok(file) => file,
@@ -215,27 +221,50 @@ impl BundleBinary {
                 info_plist,
                 resources,
             ));
-            binary.required_reason_apis.extend(apis_in(
-                image,
-                section(image, slice_bytes, "__objc_methname"),
-            ));
+            for name in ENCRYPTABLE_SECTIONS {
+                if text_sections(image, name).any(|section| image.section_encrypted(section)) {
+                    binary.encrypted_sections.push(name.to_owned());
+                }
+            }
+            // Encrypted method names are ciphertext: imports are still read (the symbol
+            // table is never encrypted), selectors are not, which `encrypted_sections` records.
+            let method_names = text_sections(image, "__objc_methname")
+                .all(|section| !image.section_encrypted(section))
+                .then(|| section(image, slice_bytes, "__objc_methname"))
+                .flatten();
+            binary
+                .required_reason_apis
+                .extend(apis_in(image, method_names));
         }
         binary
             .required_reason_apis
             .sort_by(|left, right| (left.category, left.api).cmp(&(right.category, right.api)));
         binary.required_reason_apis.dedup();
+        binary.encrypted_sections.sort();
+        binary.encrypted_sections.dedup();
         binary.macho = Ok(file);
         binary
     }
 }
 
-/// A `__TEXT` section's bytes within its slice, when the slice holds them.
-fn section<'data>(image: &MachO, slice: &'data [u8], name: &str) -> Option<&'data [u8]> {
-    let section = image
+/// The `__TEXT` sections msec reads content from, which the App Store's encryption can hide.
+const ENCRYPTABLE_SECTIONS: [&str; 2] = ["__cstring", "__objc_methname"];
+
+/// The `__TEXT` sections named `name`.
+fn text_sections<'image>(
+    image: &'image MachO,
+    name: &'image str,
+) -> impl Iterator<Item = &'image crate::macho::Section> {
+    image
         .segments
         .iter()
         .flat_map(|segment| &segment.sections)
-        .find(|section| section.segment == "__TEXT" && section.name == name)?;
+        .filter(move |section| section.segment == "__TEXT" && section.name == name)
+}
+
+/// A `__TEXT` section's bytes within its slice, when the slice holds them.
+fn section<'data>(image: &MachO, slice: &'data [u8], name: &str) -> Option<&'data [u8]> {
+    let section = text_sections(image, name).next()?;
     let start = usize::try_from(section.offset).ok()?;
     let size = usize::try_from(section.size).ok()?;
     slice.get(start..start.checked_add(size)?)

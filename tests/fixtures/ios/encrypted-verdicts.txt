@@ -1,0 +1,14 @@
+Fixture:
+  cryptoff 16384
+  cryptsize 16384
+  cryptid 1
+  __cstring 17248 0x0000000000000009
+  __objc_methname 17257 0x00000000000000ad
+Frameworks/Lib.framework/Lib:
+  cryptoff 16384
+  cryptsize 16384
+  cryptid 0
+Frameworks/Alamofire.framework/Alamofire:
+  cryptoff 16384
+  cryptsize 16384
+  cryptid 0

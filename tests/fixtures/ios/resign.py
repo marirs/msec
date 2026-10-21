@@ -8,9 +8,11 @@ identities in the user's keychain search list, which fixtures must not touch. Ap
 reads the result back as the oracle (build_certificate_signed.sh).
 
     python3 -I resign.py <executable> <leaf.pem> <leaf.key> <chain.pem> <team> [--tamper-cms]
+        [--sha512]
 
 OPENSSL names an OpenSSL 3 binary (LibreSSL has no cms command). --tamper-cms flips the last byte of the CMS signature (inside the signer's signature value),
-so the signature no longer verifies while everything it signs is intact.
+so the signature no longer verifies while everything it signs is intact. --sha512 digests
+with SHA-512, which an Ed25519 signer needs.
 """
 
 import hashlib
@@ -91,14 +93,14 @@ def code_directory(old, team, image, code_limit):
     )
 
 
-def cms_signature(directory, leaf, key, chain):
+def cms_signature(directory, leaf, key, chain, digest):
     with tempfile.TemporaryDirectory() as work:
         content = Path(work) / "cd"
         signature = Path(work) / "cms"
         content.write_bytes(directory)
         subprocess.run(
             [os.environ.get("OPENSSL", "openssl"), "cms", "-sign", "-binary", "-in", str(content), "-signer", leaf,
-             "-inkey", key, "-certfile", chain, "-md", "sha256", "-outform", "DER",
+             "-inkey", key, "-certfile", chain, "-md", digest, "-outform", "DER",
              "-out", str(signature)],
             check=True,
         )
@@ -119,6 +121,8 @@ def superblob(entries):
 def main():
     executable, leaf, key, chain, team = sys.argv[1:6]
     tamper = "--tamper-cms" in sys.argv[6:]
+    # Ed25519 signers digest with SHA-512 (RFC 8419); every other signer here uses SHA-256.
+    digest = "sha512" if "--sha512" in sys.argv[6:] else "sha256"
     data = bytearray(Path(executable).read_bytes())
     signature_command = linkedit = None
     for cmd, offset in load_commands(data):
@@ -136,7 +140,7 @@ def main():
     struct.pack_into("<Q", data, linkedit + 48, file_size)
     image = bytes(data[:data_offset])
     directory = code_directory(old[SLOT_CODE_DIRECTORY], team, image, data_offset)
-    cms = bytearray(cms_signature(directory, leaf, key, chain))
+    cms = bytearray(cms_signature(directory, leaf, key, chain, digest))
     if tamper:
         cms[-1] ^= 0xFF
     entries = [(SLOT_CODE_DIRECTORY, directory)]
