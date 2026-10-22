@@ -94,6 +94,11 @@ fn ipa_fixtures_agree() {
     let mut compared = 0;
     for entry in std::fs::read_dir(directory).unwrap() {
         let path = entry.unwrap().path();
+        // Built to disagree (build_rule_variants.sh): its executable is
+        // macho/der/der-entitlements-mismatch, which the DER fixtures test above checks.
+        if path.ends_with("variant-der-mismatch.ipa") {
+            continue;
+        }
         let bytes = std::fs::read(&path).unwrap();
         let mut archive = ZipArchive::open(Cursor::new(bytes), Limits::default()).unwrap();
         let Some(app) = msec::ios::Ipa::read(&mut archive).app else {

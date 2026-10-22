@@ -1,0 +1,67 @@
+variant-no-pie:
+  flags: none
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import ___strcpy_chk
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-stack-exec:
+  flags: ALLOW_STACK_EXECUTION PIE 
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import ___strcpy_chk
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-manual:
+  flags: PIE 
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-debug:
+  flags: PIE 
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import ___strcpy_chk
+  debug entries: 9
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-unfortified:
+  flags: PIE 
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import _strcpy
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-random-rpath:
+  flags: PIE 
+  rpath: /usr/local/lib
+  import _rand
+  import _srand
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-unsigned:
+  flags: PIE 
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import _objc_autoreleasePoolPush
+  debug entries: 1
+  codesign: code object is not signed at all
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-der-mismatch:
+  flags: PIE 
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsArbitraryLoads":true,"NSExceptionDomains":{"example.com":{"NSExceptionMinimumTLSVersion":"TLSv1.0","NSIncludesSubdomains":true}}}
+variant-ats-exceptions:
+  flags: PIE 
+  rpath: @executable_path/Frameworks
+  import ___stack_chk_fail
+  import ___stack_chk_guard
+  import _objc_autoreleasePoolPush
+  debug entries: 0
+  codesign: Signature=adhoc
+  ats: {"NSAllowsLocalNetworking":true,"NSExceptionDomains":{"example.com":{"NSExceptionAllowsInsecureHTTPLoads":true,"NSExceptionRequiresForwardSecrecy":false}},"NSAllowsArbitraryLoadsInWebContent":true,"NSAllowsArbitraryLoadsForMedia":true}
