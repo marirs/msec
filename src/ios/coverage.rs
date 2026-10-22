@@ -2,7 +2,7 @@
 //! APPCHK: a limitation is a check msec does not have; this is a check msec has that could not
 //! run on some part of this app). A rule fed by an unchecked part is incomplete, not clean.
 //!
-//! Six causes exist:
+//! Seven causes exist:
 //! - the App Store encrypted an executable (FairPlay, `cryptid` set): its code pages cannot be
 //!   hashed, and the `__TEXT` sections msec reads (Objective-C method names, C strings) are
 //!   ciphertext. Load commands, imports and the code signature stay readable;
@@ -19,7 +19,10 @@
 //! - whether Apple issued the provisioning profile is not established (an incomplete chain, a
 //!   root named as Apple's that msec does not pin, an algorithm msec does not verify, no signer
 //!   certificate, a signer without the profile-signing extension observed on Apple's): the
-//!   profile is neither shown valid nor shown forged.
+//!   profile is neither shown valid nor shown forged;
+//! - part of an executable lies outside the file or is missing (a truncated or malformed
+//!   file): an image without a readable symbol table leaves every check on imports unread, and
+//!   a `__TEXT` section outside its slice the checks on its strings.
 //!
 //! The C strings of an encrypted executable feed the secret and tracker scans, which report
 //! the executable through [`crate::package_strings::Visitor::encrypted`]; they are listed here
@@ -50,8 +53,10 @@ pub enum UncheckedCheck {
     PageHashes,
     /// Objective-C method names, read for required-reason APIs called by selector.
     MethodNames,
-    /// C strings, read by the secret and tracker scans.
+    /// C strings, read by the secret and tracker scans and for WebKit preference keys.
     Strings,
+    /// The symbol table's imports: functions, constants and classes the code uses.
+    Imports,
     /// The CMS signature over the CodeDirectory, and every signer check that needs it.
     SignerSignature,
     /// The certificate chain's links up to Apple's root.
@@ -71,8 +76,8 @@ pub enum UncheckedCheck {
 
 impl UncheckedCheck {
     /// The engine keys of the findings this check would have produced: rules mapping them are
-    /// incomplete. Strings feed the secret and tracker scans, whose results carry their own
-    /// unread files, so they name no key here.
+    /// incomplete. Strings also feed the secret and tracker scans, whose results carry their
+    /// own unread files, so only the WebKit preference check is named here.
     pub fn keys(self) -> Vec<&'static str> {
         match self {
             Self::PageHashes => vec![BinaryRule::SignatureMismatch.key()],
@@ -80,7 +85,15 @@ impl UncheckedCheck {
                 AppRule::RequiredReasonUndeclared.key(),
                 AppRule::PurposeStringMissing.key(),
             ],
-            Self::Strings => Vec::new(),
+            Self::Strings => vec![BinaryRule::WebViewFileOriginRelaxed.key()],
+            Self::Imports => BinaryRule::READ_IMPORTS
+                .iter()
+                .map(|rule| rule.key())
+                .chain([
+                    AppRule::RequiredReasonUndeclared.key(),
+                    AppRule::PurposeStringMissing.key(),
+                ])
+                .collect(),
             Self::SignerSignature => vec![
                 BinaryRule::CmsSignatureInvalid.key(),
                 BinaryRule::SignerNotApple.key(),
@@ -119,6 +132,8 @@ pub enum UncheckedCause {
     DistributionUnknown,
     /// Who issued the provisioning profile is not established.
     IssuerNotEstablished,
+    /// Part of the executable lies outside the file or is missing.
+    Malformed,
 }
 
 /// Everything msec's checks could not examine in `app`: by executable, then slice, then
@@ -127,6 +142,7 @@ pub fn unchecked(app: &AppBundle) -> Vec<Unchecked> {
     let mut found = Vec::new();
     for binary in &app.binaries {
         encrypted_parts(binary, &mut found);
+        malformed_parts(binary, &mut found);
         unverified_signers(binary, &mut found);
     }
     unrecorded_build(app, &mut found);
@@ -327,8 +343,8 @@ fn encrypted_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
             ),
             "__cstring" => (
                 UncheckedCheck::Strings,
-                "C strings (__cstring) are encrypted: secrets and tracker hosts in them cannot \
-                 be found",
+                "C strings (__cstring) are encrypted: secrets, tracker hosts and WebKit \
+                 preference keys in them cannot be found",
             ),
             // ENCRYPTABLE_SECTIONS lists only the two above.
             _ => continue,
@@ -336,6 +352,48 @@ fn encrypted_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
         found.push(Unchecked {
             check,
             cause: UncheckedCause::Encrypted,
+            location: binary.path.clone(),
+            architecture: None,
+            detail: what.to_owned(),
+        });
+    }
+}
+
+/// Parts a truncated or malformed executable does not hold: the symbol table (no import was
+/// read, so a check on imports would see none) and `__TEXT` sections outside their slice.
+fn malformed_parts(binary: &BundleBinary, found: &mut Vec<Unchecked>) {
+    let several = binary.signatures.len() > 1;
+    for (image, check) in binary.images().zip(&binary.signatures) {
+        if image.symbols.is_none() {
+            found.push(Unchecked {
+                check: UncheckedCheck::Imports,
+                cause: UncheckedCause::Malformed,
+                location: binary.path.clone(),
+                architecture: several.then(|| check.architecture.clone()),
+                detail: "the symbol table is missing or lies outside the file: imported \
+                         functions, constants and classes were not read"
+                    .to_owned(),
+            });
+        }
+    }
+    for section in &binary.unreadable_sections {
+        let (check, what) = match section.as_str() {
+            "__objc_methname" => (
+                UncheckedCheck::MethodNames,
+                "Objective-C method names (__objc_methname) lie outside the file: required-reason \
+                 APIs called by selector cannot be found",
+            ),
+            "__cstring" => (
+                UncheckedCheck::Strings,
+                "C strings (__cstring) lie outside the file: secrets, tracker hosts and WebKit \
+                 preference keys in them cannot be found",
+            ),
+            // ENCRYPTABLE_SECTIONS lists only the two above.
+            _ => continue,
+        };
+        found.push(Unchecked {
+            check,
+            cause: UncheckedCause::Malformed,
             location: binary.path.clone(),
             architecture: None,
             detail: what.to_owned(),

@@ -649,7 +649,7 @@ fn binary_checks_follow_the_build() {
     use msec::ios::analysis::{BinaryRule, analyse_binary};
     use msec::ios::{BinaryRole, BundleBinary};
 
-    let rules = |name: &str| -> Vec<BinaryRule> {
+    let all_rules = |name: &str| -> Vec<BinaryRule> {
         let bytes = read(&format!("bin/{name}"));
         let binary = BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, None, None);
         let mut rules: Vec<BinaryRule> = analyse_binary(&binary)
@@ -659,6 +659,26 @@ fn binary_checks_follow_the_build() {
         rules.dedup();
         rules
     };
+    // Most sources print their result (NSLog, printf, Swift's print): a logging reference is
+    // the source's choice, not the build's, and is checked on its own below.
+    let rules = |name: &str| -> Vec<BinaryRule> {
+        all_rules(name)
+            .into_iter()
+            .filter(|rule| *rule != BinaryRule::LoggingApi)
+            .collect()
+    };
+    for (name, logs) in [
+        ("hardened", true),
+        ("swift", true),
+        ("debug", true),
+        ("plain", false),
+    ] {
+        assert_eq!(
+            all_rules(name).contains(&BinaryRule::LoggingApi),
+            logs,
+            "{name}"
+        );
+    }
     assert_eq!(rules("hardened"), []);
     // strcpy is fortified (__strcpy_chk) by default: bounded at run time, not flagged.
     assert_eq!(rules("plain"), [BinaryRule::Unsigned]);

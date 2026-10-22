@@ -4,6 +4,13 @@
 //! or not matching what it seals), run-path search paths that leave the bundle, and the
 //! `get-task-allow` entitlement.
 //!
+//! The crypto, storage, WebView and logging checks rest on what an executable imports (a
+//! function, a constant, a class) or, for WebKit preferences set by key-value coding, on a C
+//! string naming the key ([`BinaryEvidence`]). Either shows the code refers to the API, not
+//! that it runs or what data it handles: none of these findings is a proven vulnerability.
+//! Arguments are not read (that needs disassembly), so CommonCrypto's cipher and mode
+//! constants, and `Data.WritingOptions.noFileProtection`, are not seen.
+//!
 //! The stack-protector and ARC checks are heuristics on imports ([`crate::macho::Hardening`]).
 //! A binary with Swift code is not held to the stack protector: Swift's own code does not use
 //! it, and its runtime interop imports C functions, so a missing import there does not show
@@ -41,8 +48,57 @@ const WEAK_HASHES: [&str; 6] = [
     "_CC_MD5_Init",
     "_CC_SHA1_Init",
 ];
+/// CryptoKit's `Insecure` namespace (MD5, SHA-1 and their digests): Swift imports its type
+/// metadata and conformances, since the hash functions themselves are inlined generics
+/// (checked with `nm -u` on swiftc output, `tests/fixtures/ios/security`).
+const CRYPTOKIT_INSECURE_PREFIX: &str = "_$s9CryptoKit8InsecureO";
 /// C library random numbers, predictable by design.
 const INSECURE_RANDOM: [&str; 4] = ["_rand", "_srand", "_random", "_srandom"];
+/// `(symbol, name)` of logging functions, as MASTG-TEST-0297 lists them: `NSLog` and `NSLogv`
+/// write to the unified system log; Swift's `print` and `debugPrint` and C's `printf` write to
+/// standard output. `os_log` and `Logger`, which redact dynamic values unless marked public,
+/// are not listed.
+const LOGGING_FUNCTIONS: [(&str, &str); 5] = [
+    ("_NSLog", "NSLog"),
+    ("_NSLogv", "NSLogv"),
+    ("_printf", "printf"),
+    (
+        "_$ss5print_9separator10terminatoryypd_S2StF",
+        "print (Swift)",
+    ),
+    (
+        "_$ss10debugPrint_9separator10terminatoryypd_S2StF",
+        "debugPrint (Swift)",
+    ),
+];
+/// `(symbol, name)` of the file protection class that leaves a file readable while the device
+/// is locked (MASTG-TEST-0300). Swift's `FileProtectionType.none` and `URLFileProtection.none`
+/// import the same constants.
+const FILE_PROTECTION_NONE: [(&str, &str); 2] = [
+    ("_NSFileProtectionNone", "NSFileProtectionNone"),
+    ("_NSURLFileProtectionNone", "NSURLFileProtectionNone"),
+];
+/// `(symbol, name)` of the keychain accessibility values that keep an item readable while the
+/// device is locked (deprecated since iOS 12).
+const KEYCHAIN_ACCESSIBLE_ALWAYS: [(&str, &str); 2] = [
+    ("_kSecAttrAccessibleAlways", "kSecAttrAccessibleAlways"),
+    (
+        "_kSecAttrAccessibleAlwaysThisDeviceOnly",
+        "kSecAttrAccessibleAlwaysThisDeviceOnly",
+    ),
+];
+/// `(symbol, name)` of the deprecated `UIWebView` class (MASTG-TEST-0331; App Store Connect
+/// refuses it, ITMS-90809): referenced to create, or to subclass, one.
+const UIWEBVIEW_CLASS: [(&str, &str); 2] = [
+    ("_OBJC_CLASS_$_UIWebView", "UIWebView"),
+    ("_OBJC_METACLASS_$_UIWebView", "UIWebView (subclassed)"),
+];
+/// The WebKit preferences that relax the file origin rules (MASTG-TEST-0335). They are not
+/// public API: apps set them by key-value coding, so the key is a string in the executable.
+pub const WEBVIEW_FILE_ORIGIN_KEYS: [&str; 2] = [
+    "allowFileAccessFromFileURLs",
+    "allowUniversalAccessFromFileURLs",
+];
 
 /// A check on an executable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,6 +125,18 @@ pub enum BinaryRule {
     WeakHashes,
     /// C library random numbers are imported (MobSF IPA rule).
     InsecureRandom,
+    /// Logging functions are imported (msec).
+    LoggingApi,
+    /// The "none" file protection class is imported: files readable while the device is
+    /// locked (msec).
+    FileProtectionNone,
+    /// A keychain accessibility value that keeps items readable while the device is locked is
+    /// imported (msec).
+    KeychainAccessibleAlways,
+    /// The deprecated `UIWebView` class is referenced (msec).
+    UiWebView,
+    /// A C string names a WebKit preference that relaxes the file origin rules (msec).
+    WebViewFileOriginRelaxed,
     /// The main executable's entitlements allow debugging (`get-task-allow`): a development
     /// build (msec).
     GetTaskAllow,
@@ -101,6 +169,11 @@ impl BinaryRule {
             Self::UnboundedFunctions => "msec_macho_unbounded_functions",
             Self::WeakHashes => "msec_macho_weak_hashes",
             Self::InsecureRandom => "msec_macho_insecure_random",
+            Self::LoggingApi => "msec_macho_logging_api",
+            Self::FileProtectionNone => "msec_macho_file_protection_none",
+            Self::KeychainAccessibleAlways => "msec_macho_keychain_accessible_always",
+            Self::UiWebView => "msec_macho_uiwebview",
+            Self::WebViewFileOriginRelaxed => "msec_macho_webview_file_origin_relaxed",
             Self::GetTaskAllow => "msec_ios_get_task_allow",
             Self::CmsSignatureInvalid => "msec_macho_cms_signature_invalid",
             Self::SignerNotApple => "msec_macho_signer_not_apple",
@@ -123,10 +196,14 @@ impl BinaryRule {
             | Self::SignerNotApple
             | Self::TeamMismatch
             | Self::EntitlementsDiffer => Severity::High,
-            Self::UnboundedFunctions | Self::WeakHashes | Self::RpathOutsideBundle => {
-                Severity::Warning
-            }
-            Self::DebugSymbols | Self::InsecureRandom => Severity::Info,
+            Self::UnboundedFunctions
+            | Self::WeakHashes
+            | Self::RpathOutsideBundle
+            | Self::FileProtectionNone
+            | Self::KeychainAccessibleAlways
+            | Self::UiWebView
+            | Self::WebViewFileOriginRelaxed => Severity::Warning,
+            Self::DebugSymbols | Self::InsecureRandom | Self::LoggingApi => Severity::Info,
         }
     }
 
@@ -140,10 +217,56 @@ impl BinaryRule {
             | Self::CmsSignatureInvalid
             | Self::SignerNotApple
             | Self::TeamMismatch
-            | Self::EntitlementsDiffer => Origin::Msec,
+            | Self::EntitlementsDiffer
+            | Self::LoggingApi
+            | Self::FileProtectionNone
+            | Self::KeychainAccessibleAlways
+            | Self::UiWebView
+            | Self::WebViewFileOriginRelaxed => Origin::Msec,
             _ => Origin::MobSf,
         }
     }
+
+    /// What a code finding of this rule rests on; `None` for checks that are not about the
+    /// code's use of an API (hardening flags, signatures, entitlements).
+    pub fn evidence(self) -> Option<BinaryEvidence> {
+        match self {
+            Self::UnboundedFunctions
+            | Self::WeakHashes
+            | Self::InsecureRandom
+            | Self::LoggingApi
+            | Self::FileProtectionNone
+            | Self::KeychainAccessibleAlways
+            | Self::UiWebView => Some(BinaryEvidence::Import),
+            Self::WebViewFileOriginRelaxed => Some(BinaryEvidence::String),
+            _ => None,
+        }
+    }
+
+    /// The rules that read the symbol table's imports: an image whose symbol table was not
+    /// read leaves them incomplete ([`super::coverage`]), and the hardening heuristics among
+    /// them report nothing for it rather than a missing protection.
+    pub const READ_IMPORTS: [Self; 9] = [
+        Self::NoStackCanary,
+        Self::NoArc,
+        Self::UnboundedFunctions,
+        Self::WeakHashes,
+        Self::InsecureRandom,
+        Self::LoggingApi,
+        Self::FileProtectionNone,
+        Self::KeychainAccessibleAlways,
+        Self::UiWebView,
+    ];
+}
+
+/// What a code finding rests on. Neither is a proven vulnerability: whether the code runs, and
+/// with what data, is not established.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BinaryEvidence {
+    /// The executable imports the symbol (a function, a constant, a class).
+    Import,
+    /// A C string in the executable names the setting.
+    String,
 }
 
 /// One finding about one executable.
@@ -235,6 +358,19 @@ pub fn analyse_binary(binary: &BundleBinary) -> Vec<BinaryFinding> {
         image_checks(image, &mut push);
         entitlement_checks(image, &mut push);
     }
+    if !binary.webview_file_origin_keys.is_empty() {
+        findings.push(BinaryFinding {
+            rule: BinaryRule::WebViewFileOriginRelaxed,
+            binary: binary.path.clone(),
+            architecture: None,
+            detail: format!(
+                "names the WebKit preference {} (set by key-value coding): JavaScript in a \
+                 file: page may read other files, or any origin; the value set, and which web \
+                 view it configures, are not established",
+                binary.webview_file_origin_keys.join(", ")
+            ),
+        });
+    }
     signature_checks(binary, &mut findings);
     findings
 }
@@ -253,7 +389,12 @@ fn image_checks(image: &MachO, push: &mut impl FnMut(BinaryRule, String)) {
             "MH_ALLOW_STACK_EXECUTION is set: the stack is executable".to_owned(),
         );
     }
-    if !hardening.stack_canary && !hardening.swift {
+    // Without a symbol table every import check reads nothing: the import-based heuristics
+    // would report missing protections that were never looked for. The image is reported as
+    // not read ([`super::coverage`]) instead.
+    // msec differs: MobSF reports no stack canary and no ARC for such an image.
+    let imports_read = image.symbols.is_some();
+    if imports_read && !hardening.stack_canary && !hardening.swift {
         push(
             BinaryRule::NoStackCanary,
             "___stack_chk_fail and ___stack_chk_guard are not both imported (heuristic): no \
@@ -261,7 +402,7 @@ fn image_checks(image: &MachO, push: &mut impl FnMut(BinaryRule, String)) {
                 .to_owned(),
         );
     }
-    if hardening.objective_c && !hardening.arc {
+    if imports_read && hardening.objective_c && !hardening.arc {
         push(
             BinaryRule::NoArc,
             "Objective-C without ARC runtime calls (heuristic): manual reference counting, or \
@@ -292,16 +433,105 @@ fn image_checks(image: &MachO, push: &mut impl FnMut(BinaryRule, String)) {
         (BinaryRule::WeakHashes, &WEAK_HASHES[..]),
         (BinaryRule::InsecureRandom, &INSECURE_RANDOM[..]),
     ] {
-        let found: Vec<&str> = names
+        let mut found: Vec<&str> = names
             .iter()
             .copied()
             .filter(|name| image.imports(name))
             .map(|name| name.trim_start_matches('_'))
             .collect();
+        if rule == BinaryRule::WeakHashes {
+            found.extend(insecure_cryptokit_hashes(image));
+        }
         if !found.is_empty() {
             push(rule, format!("imports {}", found.join(", ")));
         }
     }
+    named_import_checks(image, push);
+}
+
+/// The crypto, storage, WebView and logging checks on imports, each naming what it found.
+fn named_import_checks(image: &MachO, push: &mut impl FnMut(BinaryRule, String)) {
+    let named = |list: &[(&str, &'static str)]| -> Vec<&'static str> {
+        list.iter()
+            .filter(|(symbol, _)| image.imports(symbol))
+            .map(|(_, name)| *name)
+            .collect()
+    };
+    let logging = named(&LOGGING_FUNCTIONS);
+    if !logging.is_empty() {
+        push(
+            BinaryRule::LoggingApi,
+            format!(
+                "imports {}: NSLog and NSLogv write to the system log, print, debugPrint and \
+                 printf to standard output; what is logged is not established",
+                logging.join(", ")
+            ),
+        );
+    }
+    let unprotected = named(&FILE_PROTECTION_NONE);
+    if !unprotected.is_empty() {
+        push(
+            BinaryRule::FileProtectionNone,
+            format!(
+                "imports {}: files given this protection class stay readable while the device \
+                 is locked; which files, and what they hold, is not established",
+                unprotected.join(", ")
+            ),
+        );
+    }
+    let always = named(&KEYCHAIN_ACCESSIBLE_ALWAYS);
+    if !always.is_empty() {
+        push(
+            BinaryRule::KeychainAccessibleAlways,
+            format!(
+                "imports {}: keychain items stored with it stay readable while the device is \
+                 locked (deprecated since iOS 12); which items is not established",
+                always.join(", ")
+            ),
+        );
+    }
+    let legacy = named(&UIWEBVIEW_CLASS);
+    if !legacy.is_empty() {
+        push(
+            BinaryRule::UiWebView,
+            format!(
+                "references {}: deprecated since iOS 12 (no process isolation, JavaScript \
+                 cannot be turned off); App Store Connect refuses apps that use it (ITMS-90809)",
+                legacy.join(", ")
+            ),
+        );
+    }
+}
+
+/// CryptoKit's insecure hashes the image imports, by name (`Insecure.MD5`, `Insecure.SHA1`).
+fn insecure_cryptokit_hashes(image: &MachO) -> Vec<&'static str> {
+    let Some(symbols) = &image.symbols else {
+        return Vec::new();
+    };
+    let start = symbols
+        .imports
+        .partition_point(|name| name.as_str() < CRYPTOKIT_INSECURE_PREFIX);
+    let insecure = symbols.imports[start..]
+        .iter()
+        .take_while(|name| name.starts_with(CRYPTOKIT_INSECURE_PREFIX));
+    let mut found = Vec::new();
+    for name in insecure {
+        // Swift mangling: `3MD5V` and `9MD5DigestV` are MD5's types, `4SHA1V` and
+        // `10SHA1DigestV` SHA-1's.
+        let member = &name[CRYPTOKIT_INSECURE_PREFIX.len()..];
+        let hash = if member.starts_with("3MD5V") || member.starts_with("9MD5DigestV") {
+            "Insecure.MD5"
+        } else if member.starts_with("4SHA1V") || member.starts_with("10SHA1DigestV") {
+            "Insecure.SHA1"
+        } else {
+            continue;
+        };
+        if !found.contains(&hash) {
+            found.push(hash);
+        }
+    }
+    found.sort_unstable();
+    found
 }
 
 fn signature_checks(binary: &BundleBinary, findings: &mut Vec<BinaryFinding>) {

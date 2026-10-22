@@ -1,0 +1,31 @@
+positive Fixture:
+  import NSFileProtectionNone
+  import NSLog
+  import NSLogv
+  import NSURLFileProtectionNone
+  import OBJC_CLASS_$_UIWebView
+  import kSecAttrAccessibleAlways
+  import kSecAttrAccessibleAlwaysThisDeviceOnly
+  import printf
+  string allowFileAccessFromFileURLs
+  string allowUniversalAccessFromFileURLs
+positive Frameworks/Lib.framework/Lib:
+  import $s9CryptoKit8InsecureO10SHA1DigestV11descriptionSSvg
+  import $s9CryptoKit8InsecureO10SHA1DigestVMa
+  import $s9CryptoKit8InsecureO3MD5VAA12HashFunctionAAMc
+  import $s9CryptoKit8InsecureO3MD5VMa
+  import $s9CryptoKit8InsecureO4SHA1VAA12HashFunctionAAMc
+  import $s9CryptoKit8InsecureO4SHA1VMa
+  import $s9CryptoKit8InsecureO9MD5DigestV11descriptionSSvg
+  import $s9CryptoKit8InsecureO9MD5DigestVMa
+  import $ss10debugPrint_9separator10terminatoryypd_S2StF
+  import $ss5print_9separator10terminatoryypd_S2StF
+  string allowFileAccessFromFileURLs
+clean Fixture:
+clean Frameworks/Lib.framework/Lib:
+incomplete Fixture:
+  cryptoff 16384
+  cryptsize 16384
+  cryptid 1
+incomplete Frameworks/Lib.framework/Lib:
+  nm error: truncated or malformed object (load command 3 fileoff field plus filesize field in LC_SEGMENT_64 extends past the end of the file)

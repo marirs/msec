@@ -12,6 +12,7 @@
 
 use std::io::{Read, Seek};
 
+use super::analysis::WEBVIEW_FILE_ORIGIN_KEYS;
 use super::purpose_strings::{ResourceUse, uses_in};
 use super::required_reason::{ApiUse, apis_in};
 use crate::archive::ZipArchive;
@@ -57,6 +58,12 @@ pub struct BundleBinary {
     /// encrypted in some slice (FairPlay), sorted: what they hold was not read, so the checks
     /// that read them are incomplete for this executable.
     pub encrypted_sections: Vec<String>,
+    /// `__TEXT` sections msec reads whose range lies outside their slice (a truncated or
+    /// malformed file), sorted: likewise not read.
+    pub unreadable_sections: Vec<String>,
+    /// The WebKit preferences relaxing file origin rules that a C string names
+    /// ([`super::analysis::WEBVIEW_FILE_ORIGIN_KEYS`]), sorted.
+    pub webview_file_origin_keys: Vec<String>,
 }
 
 impl BundleBinary {
@@ -153,6 +160,8 @@ pub(super) fn read_binary<R: Read + Seek>(
         required_reason_apis: Vec::new(),
         protected_resource_uses: Vec::new(),
         encrypted_sections: Vec::new(),
+        unreadable_sections: Vec::new(),
+        webview_file_origin_keys: Vec::new(),
     };
     let Some(entry) = archive.find(path) else {
         return binary;
@@ -206,6 +215,8 @@ impl BundleBinary {
             required_reason_apis: Vec::new(),
             protected_resource_uses: Vec::new(),
             encrypted_sections: Vec::new(),
+            unreadable_sections: Vec::new(),
+            webview_file_origin_keys: Vec::new(),
         };
         let file = match parse(bytes) {
             Ok(file) => file,
@@ -230,7 +241,24 @@ impl BundleBinary {
             for name in ENCRYPTABLE_SECTIONS {
                 if text_sections(image, name).any(|section| image.section_encrypted(section)) {
                     binary.encrypted_sections.push(name.to_owned());
+                } else if text_sections(image, name).next().is_some()
+                    && section(image, slice_bytes, name).is_none()
+                {
+                    binary.unreadable_sections.push(name.to_owned());
                 }
+            }
+            let c_strings = text_sections(image, "__cstring")
+                .all(|section| !image.section_encrypted(section))
+                .then(|| section(image, slice_bytes, "__cstring"))
+                .flatten();
+            if let Some(c_strings) = c_strings {
+                binary.webview_file_origin_keys.extend(
+                    c_strings
+                        .split(|byte| *byte == 0)
+                        .filter_map(|string| std::str::from_utf8(string).ok())
+                        .filter(|string| WEBVIEW_FILE_ORIGIN_KEYS.contains(string))
+                        .map(str::to_owned),
+                );
             }
             // Encrypted method names are ciphertext: imports are still read (the symbol
             // table is never encrypted), selectors are not, which `encrypted_sections` records.
@@ -255,6 +283,10 @@ impl BundleBinary {
         binary.required_reason_apis.dedup();
         binary.encrypted_sections.sort();
         binary.encrypted_sections.dedup();
+        binary.unreadable_sections.sort();
+        binary.unreadable_sections.dedup();
+        binary.webview_file_origin_keys.sort();
+        binary.webview_file_origin_keys.dedup();
         binary.macho = Ok(file);
         binary
     }

@@ -351,9 +351,9 @@ fn signature_checks_match_codesign() {
     assert_eq!(check.mismatched_pages, [1]);
 }
 
-/// The checks on the fixture's executables: the development entitlement, and MobSF's
-/// stack-protector heuristic on the C components that have no stack buffers; changes after
-/// signing are caught.
+/// The checks on the fixture's executables: the development entitlement, MobSF's
+/// stack-protector heuristic on the C components that have no stack buffers, and the main
+/// executable's NSLog; changes after signing are caught.
 #[test]
 fn binary_checks_report_what_they_find() {
     use msec::ios::analysis::{BinaryRule, analyse_binaries};
@@ -374,6 +374,8 @@ fn binary_checks_report_what_they_find() {
             ),
             (BinaryRule::NoStackCanary, app("Frameworks/libextra.dylib")),
             (BinaryRule::NoStackCanary, app("PlugIns/Share.appex/Share")),
+            // main.m logs with NSLog: a reference to a logging API, not a vulnerability.
+            (BinaryRule::LoggingApi, app("Fixture")),
             (BinaryRule::GetTaskAllow, app("Fixture")),
         ]
     );
