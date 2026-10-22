@@ -1,0 +1,287 @@
+Class #0            -
+  Class descriptor  : 'Lcom/android/billingclient/api/BillingClient;'
+  Access flags      : 0x0401 (PUBLIC ABSTRACT)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Lcom/android/billingclient/api/BillingClient;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+0003bc:                                        |[0003bc] com.android.billingclient.api.BillingClient.<init>:()V
+0003cc: 7010 1400 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@0014
+0003d2: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Lcom/android/billingclient/api/BillingClient;)
+      name          : 'newBuilder'
+      type          : '(Ljava/lang/Object;)Ljava/lang/Object;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 0
+      insns size    : 2 16-bit code units
+0003a8:                                        |[0003a8] com.android.billingclient.api.BillingClient.newBuilder:(Ljava/lang/Object;)Ljava/lang/Object;
+0003b8: 1200                                   |0000: const/4 v0, #int 0 // #0
+0003ba: 1100                                   |0001: return-object v0
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 1
+
+Class #1            -
+  Class descriptor  : 'Lcom/google/firebase/auth/FirebaseAuth;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Lcom/google/firebase/auth/FirebaseAuth;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000420:                                        |[000420] com.google.firebase.auth.FirebaseAuth.<init>:()V
+000430: 7010 1400 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@0014
+000436: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Lcom/google/firebase/auth/FirebaseAuth;)
+      name          : 'getInstance'
+      type          : '()Lcom/google/firebase/auth/FirebaseAuth;'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 1
+      ins           : 0
+      outs          : 1
+      insns size    : 6 16-bit code units
+0003d4:                                        |[0003d4] com.google.firebase.auth.FirebaseAuth.getInstance:()Lcom/google/firebase/auth/FirebaseAuth;
+0003e4: 2200 0800                              |0000: new-instance v0, Lcom/google/firebase/auth/FirebaseAuth; // type@0008
+0003e8: 7010 0700 0000                         |0002: invoke-direct {v0}, Lcom/google/firebase/auth/FirebaseAuth;.<init>:()V // method@0007
+0003ee: 1100                                   |0005: return-object v0
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Lcom/google/firebase/auth/FirebaseAuth;)
+      name          : 'createUserWithEmailAndPassword'
+      type          : '(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 3
+      outs          : 0
+      insns size    : 2 16-bit code units
+00040c:                                        |[00040c] com.google.firebase.auth.FirebaseAuth.createUserWithEmailAndPassword:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;
+00041c: 1200                                   |0000: const/4 v0, #int 0 // #0
+00041e: 1100                                   |0001: return-object v0
+      catches       : (none)
+
+    #1              : (in Lcom/google/firebase/auth/FirebaseAuth;)
+      name          : 'getCurrentUser'
+      type          : '()Lcom/google/firebase/auth/FirebaseUser;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 6 16-bit code units
+0003f0:                                        |[0003f0] com.google.firebase.auth.FirebaseAuth.getCurrentUser:()Lcom/google/firebase/auth/FirebaseUser;
+000400: 2200 0900                              |0000: new-instance v0, Lcom/google/firebase/auth/FirebaseUser; // type@0009
+000404: 7010 0b00 0000                         |0002: invoke-direct {v0}, Lcom/google/firebase/auth/FirebaseUser;.<init>:()V // method@000b
+00040a: 1100                                   |0005: return-object v0
+      catches       : (none)
+
+  source_file_idx   : 2
+
+Class #2            -
+  Class descriptor  : 'Lcom/google/firebase/auth/FirebaseUser;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Lcom/google/firebase/auth/FirebaseUser;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+00044c:                                        |[00044c] com.google.firebase.auth.FirebaseUser.<init>:()V
+00045c: 7010 1400 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@0014
+000462: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Lcom/google/firebase/auth/FirebaseUser;)
+      name          : 'delete'
+      type          : '()Ljava/lang/Object;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 0
+      insns size    : 2 16-bit code units
+000438:                                        |[000438] com.google.firebase.auth.FirebaseUser.delete:()Ljava/lang/Object;
+000448: 1200                                   |0000: const/4 v0, #int 0 // #0
+00044a: 1100                                   |0001: return-object v0
+      catches       : (none)
+
+  source_file_idx   : 3
+
+Class #3            -
+  Class descriptor  : 'Lcom/stripe/android/PaymentConfiguration;'
+  Access flags      : 0x0011 (PUBLIC FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Lcom/stripe/android/PaymentConfiguration;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000464:                                        |[000464] com.stripe.android.PaymentConfiguration.<init>:()V
+000474: 7010 1400 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@0014
+00047a: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Lcom/stripe/android/PaymentConfiguration;)
+      name          : 'init'
+      type          : '(Ljava/lang/Object;Ljava/lang/String;)V'
+      access        : 0x0009 (PUBLIC STATIC)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 0
+      insns size    : 1 16-bit code units
+00047c:                                        |[00047c] com.stripe.android.PaymentConfiguration.init:(Ljava/lang/Object;Ljava/lang/String;)V
+00048c: 0e00                                   |0000: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 28
+
+Class #4            -
+  Class descriptor  : 'Ldev/appchk/fixture/leads/MainActivity$1;'
+  Access flags      : 0x0000 ()
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+    #0              : 'Landroid/view/View$OnApplyWindowInsetsListener;'
+  Static fields     -
+  Instance fields   -
+    #0              : (in Ldev/appchk/fixture/leads/MainActivity$1;)
+      name          : 'this$0'
+      type          : 'Ldev/appchk/fixture/leads/MainActivity;'
+      access        : 0x1010 (FINAL SYNTHETIC)
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/leads/MainActivity$1;)
+      name          : '<init>'
+      type          : '(Ldev/appchk/fixture/leads/MainActivity;)V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 1
+      insns size    : 6 16-bit code units
+0004a4:                                        |[0004a4] dev.appchk.fixture.leads.MainActivity$1.<init>:(Ldev/appchk/fixture/leads/MainActivity;)V
+0004b4: 5b01 0000                              |0000: iput-object v1, v0, Ldev/appchk/fixture/leads/MainActivity$1;.this$0:Ldev/appchk/fixture/leads/MainActivity; // field@0000
+0004b8: 7010 1400 0000                         |0002: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@0014
+0004be: 0e00                                   |0005: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/leads/MainActivity$1;)
+      name          : 'onApplyWindowInsets'
+      type          : '(Landroid/view/View;Landroid/view/WindowInsets;)Landroid/view/WindowInsets;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 3
+      ins           : 3
+      outs          : 0
+      insns size    : 1 16-bit code units
+000490:                                        |[000490] dev.appchk.fixture.leads.MainActivity$1.onApplyWindowInsets:(Landroid/view/View;Landroid/view/WindowInsets;)Landroid/view/WindowInsets;
+0004a0: 1102                                   |0000: return-object v2
+      catches       : (none)
+
+  source_file_idx   : 27
+
+Class #5            -
+  Class descriptor  : 'Ldev/appchk/fixture/leads/MainActivity;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Landroid/app/Activity;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/leads/MainActivity;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+0004c0:                                        |[0004c0] dev.appchk.fixture.leads.MainActivity.<init>:()V
+0004d0: 7010 0000 0000                         |0000: invoke-direct {v0}, Landroid/app/Activity;.<init>:()V // method@0000
+0004d6: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/leads/MainActivity;)
+      name          : 'onCreate'
+      type          : '(Landroid/os/Bundle;)V'
+      access        : 0x0004 (PROTECTED)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 3
+      insns size    : 51 16-bit code units
+0004d8:                                        |[0004d8] dev.appchk.fixture.leads.MainActivity.onCreate:(Landroid/os/Bundle;)V
+0004e8: 6f20 0100 2100                         |0000: invoke-super {v1, v2}, Landroid/app/Activity;.onCreate:(Landroid/os/Bundle;)V // method@0001
+0004ee: 2202 0600                              |0003: new-instance v2, Landroid/widget/TextView; // type@0006
+0004f2: 7020 0200 1200                         |0005: invoke-direct {v2, v1}, Landroid/widget/TextView;.<init>:(Landroid/content/Context;)V // method@0002
+0004f8: 1a00 1700                              |0008: const-string v0, "Leads" // string@0017
+0004fc: 6e20 0400 0200                         |000a: invoke-virtual {v2, v0}, Landroid/widget/TextView;.setText:(Ljava/lang/CharSequence;)V // method@0004
+000502: 6e20 1300 2100                         |000d: invoke-virtual {v1, v2}, Ldev/appchk/fixture/leads/MainActivity;.setContentView:(Landroid/view/View;)V // method@0013
+000508: 2200 0e00                              |0010: new-instance v0, Ldev/appchk/fixture/leads/MainActivity$1; // type@000e
+00050c: 7020 0f00 1000                         |0012: invoke-direct {v0, v1}, Ldev/appchk/fixture/leads/MainActivity$1;.<init>:(Ldev/appchk/fixture/leads/MainActivity;)V // method@000f
+000512: 6e20 0300 0200                         |0015: invoke-virtual {v2, v0}, Landroid/widget/TextView;.setOnApplyWindowInsetsListener:(Landroid/view/View$OnApplyWindowInsetsListener;)V // method@0003
+000518: 7110 0600 0100                         |0018: invoke-static {v1}, Lcom/android/billingclient/api/BillingClient;.newBuilder:(Ljava/lang/Object;)Ljava/lang/Object; // method@0006
+00051e: 1a02 2b00                              |001b: const-string v2, "pk_test_fixture" // string@002b
+000522: 7120 0e00 2100                         |001d: invoke-static {v1, v2}, Lcom/stripe/android/PaymentConfiguration;.init:(Ljava/lang/Object;Ljava/lang/String;)V // method@000e
+000528: 7100 0a00 0000                         |0020: invoke-static {}, Lcom/google/firebase/auth/FirebaseAuth;.getInstance:()Lcom/google/firebase/auth/FirebaseAuth; // method@000a
+00052e: 0c01                                   |0023: move-result-object v1
+000530: 1a02 3000                              |0024: const-string v2, "user@example.com" // string@0030
+000534: 1a00 3200                              |0026: const-string v0, "x" // string@0032
+000538: 6e30 0800 2100                         |0028: invoke-virtual {v1, v2, v0}, Lcom/google/firebase/auth/FirebaseAuth;.createUserWithEmailAndPassword:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object; // method@0008
+00053e: 6e10 0900 0100                         |002b: invoke-virtual {v1}, Lcom/google/firebase/auth/FirebaseAuth;.getCurrentUser:()Lcom/google/firebase/auth/FirebaseUser; // method@0009
+000544: 0c01                                   |002e: move-result-object v1
+000546: 6e10 0c00 0100                         |002f: invoke-virtual {v1}, Lcom/google/firebase/auth/FirebaseUser;.delete:()Ljava/lang/Object; // method@000c
+00054c: 0e00                                   |0032: return-void
+      catches       : (none)
+
+  source_file_idx   : 27
+

@@ -173,6 +173,23 @@ enum ConstantText {
     String(String),
 }
 
+/// The string constants passed to a framework `member` (DEX notation, resolved through app
+/// subclasses) at argument `slot`, each with the methods that pass it.
+pub(super) fn string_arguments(
+    dex_files: &[DexEntry],
+    member: &str,
+    slot: u8,
+) -> BTreeMap<String, BTreeSet<String>> {
+    CallIndex::of(dex_files)
+        .constants
+        .into_iter()
+        .filter_map(|((reached, at, value), callers)| match value {
+            ConstantText::String(text) if reached == member && at == slot => Some((text, callers)),
+            _ => None,
+        })
+        .collect()
+}
+
 impl CallIndex {
     fn of(dex_files: &[DexEntry]) -> Self {
         let files: Vec<&DexFile> = dex_files

@@ -180,9 +180,28 @@ pub enum CodeRule {
     /// References to logging APIs (`android.util.Log`, `System.out`/`System.err`); what is
     /// logged is not established.
     LoggingApi,
+    /// A third-party payment SDK ships in the app, and nothing references Google Play's billing
+    /// library. A lead for review: digital goods need Play's billing, physical goods and
+    /// services do not. See [`super::store_leads`] for this and the rules below.
+    PaymentSdkWithoutPlayBilling,
+    /// The code creates accounts through a recognised SDK, and no recognised deletion call is
+    /// seen. A lead: Google Play requires an in-app path to delete an account the app lets
+    /// people create, which may be done server-side or through a web page.
+    AccountDeletionNotSeen,
+    /// The launcher activity loads a constant remote URL into a WebView, in an app with few
+    /// classes of its own: possibly a repackaged website. A lead: minimum functionality is
+    /// judged by review.
+    WebWrapper,
 }
 
 impl CodeRule {
+    /// The store-review leads ([`super::store_leads`]).
+    pub const STORE_LEADS: [Self; 3] = [
+        Self::PaymentSdkWithoutPlayBilling,
+        Self::AccountDeletionNotSeen,
+        Self::WebWrapper,
+    ];
+
     /// The security rules on cryptography, storage, WebViews and logging
     /// ([`super::security_checks`]).
     pub const SECURITY: [Self; 17] = [
@@ -217,6 +236,9 @@ impl CodeRule {
             Self::WakeLockWithoutTimeout => "msec_store_wake_lock_without_timeout",
             Self::SignInRestorationMissing => "msec_store_sign_in_restoration_missing",
             Self::ShrinkingNotEvident => "msec_store_dex_shrinking_not_evident",
+            Self::PaymentSdkWithoutPlayBilling => "msec_store_payment_sdk_without_play_billing",
+            Self::AccountDeletionNotSeen => "msec_store_account_deletion_not_seen",
+            Self::WebWrapper => "msec_store_web_wrapper",
             Self::CipherBrokenAlgorithm => "msec_code_cipher_broken_algorithm",
             Self::CipherEcbMode => "msec_code_cipher_ecb_mode",
             Self::CipherDefaultMode => "msec_code_cipher_default_mode",
@@ -536,6 +558,11 @@ pub fn analyse_code(
     }
     findings.extend(super::security_checks::analyse_security(
         dex_files, manifest,
+    ));
+    findings.extend(super::store_leads::analyse_store_leads(
+        dex_files,
+        manifest,
+        &calls.direct,
     ));
     findings.sort_by(|left, right| {
         (left.rule, &left.api, &left.argument).cmp(&(right.rule, &right.api, &right.argument))

@@ -13,6 +13,7 @@ pub mod network;
 pub mod security_checks;
 pub mod signing_checks;
 pub mod store_checks;
+pub mod store_leads;
 
 pub use code_checks::{
     Caller, CodeEvidence, CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT,
