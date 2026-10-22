@@ -68,7 +68,15 @@ fn rule_files_read_like_aapt2_dumps_them() {
         assert!(dump.contains(line), "{line}");
     }
     let apk = Apk::read(&mut archive("backup.apk"));
-    let rules: Vec<BackupRules> = apk.backup_rules.into_iter().map(Result::unwrap).collect();
+    let rules: Vec<BackupRules> = apk
+        .backup_rules
+        .into_iter()
+        .map(|(source, rules)| {
+            let rules = rules.unwrap();
+            assert_eq!(rules.source, source);
+            rules
+        })
+        .collect();
     assert_eq!(rules, expected());
 }
 
@@ -77,7 +85,11 @@ fn an_app_bundle_reads_the_same_rules() {
     let mut archive = archive("backup.aab");
     let mut bundle = Bundle::read(&mut archive);
     let base = bundle.base.take().unwrap();
-    let rules: Vec<BackupRules> = base.backup_rules.into_iter().map(Result::unwrap).collect();
+    let rules: Vec<BackupRules> = base
+        .backup_rules
+        .into_iter()
+        .map(|(_, rules)| rules.unwrap())
+        .collect();
     assert_eq!(rules, expected());
 }
 

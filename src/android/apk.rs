@@ -44,9 +44,12 @@ pub struct Apk {
     /// decoded configuration or why it could not be read. Only the file the manifest names is
     /// read, as on Android.
     pub network_security_config: Option<Result<NetworkSecurityConfig, String>>,
-    /// The backup rule files the manifest names (`fullBackupContent`, `dataExtractionRules`),
-    /// each read or why it could not be.
-    pub backup_rules: Vec<Result<super::backup::BackupRules, String>>,
+    /// The backup rule files the manifest names (`fullBackupContent`, `dataExtractionRules`):
+    /// by attribute, each read or why it could not be.
+    pub backup_rules: Vec<(
+        super::backup::BackupRulesSource,
+        Result<super::backup::BackupRules, String>,
+    )>,
     /// Signatures, verified.
     pub signing: SigningReport,
     /// Every `.so` in the APK, parsed, with its hardening.
@@ -96,7 +99,10 @@ impl Apk {
     pub(crate) fn read_backup_rules(
         &self,
         mut read: impl FnMut(&str) -> Result<crate::android::xml::XmlDocument, String>,
-    ) -> Vec<Result<super::backup::BackupRules, String>> {
+    ) -> Vec<(
+        super::backup::BackupRulesSource,
+        Result<super::backup::BackupRules, String>,
+    )> {
         use super::backup::{BackupRules, BackupRulesSource};
         let Some(application) = self
             .manifest
@@ -119,12 +125,13 @@ impl Apk {
         .filter_map(|(source, value)| {
             // fullBackupContent="false" turns backup content off: no file to read.
             let reference = value.as_ref()?.reference()?;
-            Some(self.xml_file(reference).map_or_else(
+            let rules = self.xml_file(reference).map_or_else(
                 || Err(format!("@{reference:#010x} does not resolve to a file")),
                 |path| {
                     read(&path).map(|document| BackupRules::from_document(source, &path, &document))
                 },
-            ))
+            );
+            Some((source, rules))
         })
         .collect()
     }
