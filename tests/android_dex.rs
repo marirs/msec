@@ -716,4 +716,16 @@ fn obfuscation_is_estimated_from_class_names() {
     assert_eq!(r8.obfuscated_percent(), 50);
     // Small apps are below Google Play's 10 MB floor: the requirement does not apply.
     assert!(!r8.play_requirement_applies());
+
+    // code-r8.apk ships R8's output as its only DEX file.
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/android/code-r8.apk"
+    ))
+    .unwrap();
+    let mut archive = ZipArchive::open(Cursor::new(bytes), Limits::default()).unwrap();
+    let apk = Apk::read(&mut archive);
+    assert_eq!(apk.dex_files.len(), 1);
+    let shipped = apk.dex_optimization();
+    assert!(shipped.r8 && shipped.shrinking_evident());
 }

@@ -5,6 +5,7 @@
 #   obfuscated output for the same classes;
 # - code.apk: the code/ app with classes.dex (code/java/primary) and classes2.dex
 #   (code/java/secondary); code/java/stubs declares removed framework APIs for javac only;
+#   code-r8.apk: the same app with dex/r8.dex as its only DEX file;
 # - dex/container.dex and dex/hostile/*.dex: synthetic files from make_dex_fixtures.py;
 # - dex/**/*.dexdump.txt, dex/*.disassembly.txt and dex/art-verdicts.txt: what AOSP's dexdump
 #   (ART's DEX loader and verifier) reads in each file, its disassembly, and whether it accepts
@@ -68,6 +69,19 @@ with zipfile.ZipFile(apk, "a", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(info, open(path, "rb").read())
 EOF
 "$tools/aapt2" dump xmltree --file AndroidManifest.xml code.apk > code.xmltree.txt
+# code-r8.apk: code.apk with R8's output (dex/r8.dex) as its only DEX file, as a release build
+# ships it.
+python3 -I - code.apk dex/r8.dex code-r8.apk <<'PY'
+import sys, zipfile
+source, dex, target = sys.argv[1:]
+with zipfile.ZipFile(source) as original, zipfile.ZipFile(target, "w") as shrunk:
+    for info in original.infolist():
+        if not info.filename.startswith("classes"):
+            shrunk.writestr(info, original.read(info))
+    info = zipfile.ZipInfo("classes.dex", date_time=(2026, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    shrunk.writestr(info, open(dex, "rb").read())
+PY
 
 python3 -I dex/make_dex_fixtures.py dex/v035.dex dex
 
