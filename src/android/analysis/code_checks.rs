@@ -137,9 +137,74 @@ pub enum CodeRule {
     /// optimization requirement apply: no sign the code was shrunk or obfuscated. Not Google
     /// Play's verdict, which only Play Console shows.
     ShrinkingNotEvident,
+    /// `Cipher.getInstance` with a constant transformation naming a broken algorithm (DES,
+    /// 3DES, RC4, RC2, Blowfish). See [`super::security_checks`] for these and the rules below.
+    CipherBrokenAlgorithm,
+    /// `Cipher.getInstance` with a constant transformation naming ECB mode for a block cipher.
+    CipherEcbMode,
+    /// `Cipher.getInstance` with a constant `AES` and no mode: the provider's default applies.
+    CipherDefaultMode,
+    /// `MessageDigest.getInstance` with a constant MD2, MD4, MD5 or SHA-1.
+    WeakHash,
+    /// References to `java.util.Random` or `Math.random` (what the numbers are for is not
+    /// established).
+    InsecureRandom,
+    /// A file, preferences or database opened with a constant world-readable or -writable mode,
+    /// in an app targeting API 23 or lower (where Android honours it).
+    WorldAccessibleFiles,
+    /// The same, in an app targeting API 24 or higher: Android refuses the mode at run time.
+    WorldAccessibleFilesRefused,
+    /// References to shared external storage (what is written there is not established).
+    ExternalStorage,
+    /// `WebView.addJavascriptInterface`, in an app whose minimum API is 17 or higher (only
+    /// `@JavascriptInterface` methods are exposed).
+    WebViewBridge,
+    /// The same, in an app that runs below API 17, where every public method of the bridged
+    /// object is reachable from the page.
+    WebViewBridgeReflection,
+    /// `setAllowFileAccessFromFileURLs` or `setAllowUniversalAccessFromFileURLs` with a constant
+    /// `true`.
+    WebViewFileUrlAccess,
+    /// `setAllowFileAccess` with a constant `true`.
+    WebViewFileAccess,
+    /// `setAllowContentAccess` with a constant `true`.
+    WebViewContentAccess,
+    /// An app `WebViewClient.onReceivedSslError` override whose code calls
+    /// `SslErrorHandler.proceed`.
+    WebViewSslErrorProceed,
+    /// `WebView.setWebContentsDebuggingEnabled` with a constant `true`.
+    WebViewDebugging,
+    /// Safe Browsing turned off: `setSafeBrowsingEnabled` with a constant `false`, or the
+    /// manifest's `android.webkit.WebView.EnableSafeBrowsing` meta-data set to `false`.
+    SafeBrowsingDisabled,
+    /// References to logging APIs (`android.util.Log`, `System.out`/`System.err`); what is
+    /// logged is not established.
+    LoggingApi,
 }
 
 impl CodeRule {
+    /// The security rules on cryptography, storage, WebViews and logging
+    /// ([`super::security_checks`]).
+    pub const SECURITY: [Self; 17] = [
+        Self::CipherBrokenAlgorithm,
+        Self::CipherEcbMode,
+        Self::CipherDefaultMode,
+        Self::WeakHash,
+        Self::InsecureRandom,
+        Self::WorldAccessibleFiles,
+        Self::WorldAccessibleFilesRefused,
+        Self::ExternalStorage,
+        Self::WebViewBridge,
+        Self::WebViewBridgeReflection,
+        Self::WebViewFileUrlAccess,
+        Self::WebViewFileAccess,
+        Self::WebViewContentAccess,
+        Self::WebViewSslErrorProceed,
+        Self::WebViewDebugging,
+        Self::SafeBrowsingDisabled,
+        Self::LoggingApi,
+    ];
+
     /// Engine key.
     pub fn key(self) -> &'static str {
         match self {
@@ -152,6 +217,23 @@ impl CodeRule {
             Self::WakeLockWithoutTimeout => "msec_store_wake_lock_without_timeout",
             Self::SignInRestorationMissing => "msec_store_sign_in_restoration_missing",
             Self::ShrinkingNotEvident => "msec_store_dex_shrinking_not_evident",
+            Self::CipherBrokenAlgorithm => "msec_code_cipher_broken_algorithm",
+            Self::CipherEcbMode => "msec_code_cipher_ecb_mode",
+            Self::CipherDefaultMode => "msec_code_cipher_default_mode",
+            Self::WeakHash => "msec_code_weak_hash",
+            Self::InsecureRandom => "msec_code_insecure_random",
+            Self::WorldAccessibleFiles => "msec_code_world_accessible_files",
+            Self::WorldAccessibleFilesRefused => "msec_code_world_accessible_files_refused",
+            Self::ExternalStorage => "msec_code_external_storage",
+            Self::WebViewBridge => "msec_code_webview_bridge",
+            Self::WebViewBridgeReflection => "msec_code_webview_bridge_reflection",
+            Self::WebViewFileUrlAccess => "msec_code_webview_file_url_access",
+            Self::WebViewFileAccess => "msec_code_webview_file_access",
+            Self::WebViewContentAccess => "msec_code_webview_content_access",
+            Self::WebViewSslErrorProceed => "msec_code_webview_ssl_error_proceed",
+            Self::WebViewDebugging => "msec_code_webview_debugging",
+            Self::SafeBrowsingDisabled => "msec_code_safe_browsing_disabled",
+            Self::LoggingApi => "msec_code_logging_api",
         }
     }
 
@@ -161,6 +243,20 @@ impl CodeRule {
             Self::RemovedApi | Self::RemovedApiVersionChecked | Self::ShrinkingNotEvident => {
                 Severity::Warning
             }
+            Self::CipherBrokenAlgorithm
+            | Self::CipherEcbMode
+            | Self::WorldAccessibleFiles
+            | Self::WebViewBridgeReflection
+            | Self::WebViewFileUrlAccess
+            | Self::WebViewSslErrorProceed => Severity::High,
+            Self::CipherDefaultMode
+            | Self::WeakHash
+            | Self::InsecureRandom
+            | Self::WorldAccessibleFilesRefused
+            | Self::WebViewBridge
+            | Self::WebViewFileAccess
+            | Self::WebViewDebugging
+            | Self::SafeBrowsingDisabled => Severity::Warning,
             _ => Severity::Info,
         }
     }
@@ -181,6 +277,27 @@ pub struct CodeFinding {
     pub version_checked_callers: usize,
     /// What it means, in words.
     pub detail: String,
+    /// What shows it: a reference to the API, a constant argument at the call site, an
+    /// override that calls it, or the manifest.
+    pub evidence: CodeEvidence,
+    /// The constant argument, when that is the evidence (`AES/ECB/PKCS5Padding`, `true`).
+    pub argument: Option<String>,
+}
+
+/// What a code finding rests on. None of these is data flow or reachability: a reference shows
+/// the code names the API; a constant argument shows the value the code passes at that call
+/// (set on the only path into it, within the calling method); an override shows a method of
+/// the app's subclass calls it; the manifest shows a declared setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CodeEvidence {
+    /// The code refers to the API.
+    Reference,
+    /// The code passes a constant argument at the call site.
+    ConstantArgument,
+    /// An override in an app subclass calls the API.
+    Override,
+    /// The manifest declares the setting.
+    Manifest,
 }
 
 /// A method that refers to the API.
@@ -417,7 +534,12 @@ pub fn analyse_code(
             ),
         ));
     }
-    findings.sort_by(|left, right| (left.rule, &left.api).cmp(&(right.rule, &right.api)));
+    findings.extend(super::security_checks::analyse_security(
+        dex_files, manifest,
+    ));
+    findings.sort_by(|left, right| {
+        (left.rule, &left.api, &left.argument).cmp(&(right.rule, &right.api, &right.argument))
+    });
     findings
 }
 
@@ -505,6 +627,8 @@ fn app_wide(rule: CodeRule, detail: String) -> CodeFinding {
         caller_count: 0,
         version_checked_callers: 0,
         detail,
+        evidence: CodeEvidence::Reference,
+        argument: None,
     }
 }
 
@@ -587,13 +711,15 @@ impl ReferenceIndex {
                 .filter(|method| checks_version(method))
                 .count(),
             detail,
+            evidence: CodeEvidence::Reference,
+            argument: None,
         }
     }
 }
 
 /// `(class, member)` of a reference: `->name(params)return` for methods, `->name` for fields,
 /// empty for types (arrays reduced to their element class).
-fn target_parts(file: &DexFile, target: Target) -> Option<(String, String)> {
+pub(super) fn target_parts(file: &DexFile, target: Target) -> Option<(String, String)> {
     match target {
         Target::Method(index) => {
             let signature = file.method_signature(index)?;
@@ -616,7 +742,7 @@ fn target_parts(file: &DexFile, target: Target) -> Option<(String, String)> {
 
 /// The app's classes, their superclasses and the methods they define, across all DEX files
 /// (Android loads the first definition of a class).
-fn app_classes(files: &[&DexFile]) -> AppClasses {
+pub(super) fn app_classes(files: &[&DexFile]) -> AppClasses {
     let mut app = AppClasses::default();
     for file in files {
         for class in &file.classes {

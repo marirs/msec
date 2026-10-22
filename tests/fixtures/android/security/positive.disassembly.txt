@@ -1,0 +1,425 @@
+Class #0            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/CallShapes;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+    #0              : (in Ldev/appchk/fixture/security/CallShapes;)
+      name          : 'configured'
+      type          : 'Ljava/lang/String;'
+      access        : 0x0008 (STATIC)
+      value         : "DES/ECB/PKCS5Padding"
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/CallShapes;)
+      name          : '<clinit>'
+      type          : '()V'
+      access        : 0x10008 (STATIC CONSTRUCTOR)
+      code          -
+      registers     : 0
+      ins           : 0
+      outs          : 0
+      insns size    : 1 16-bit code units
+0006e4:                                        |[0006e4] dev.appchk.fixture.security.CallShapes.<clinit>:()V
+0006f4: 0e00                                   |0000: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/security/CallShapes;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+0006f8:                                        |[0006f8] dev.appchk.fixture.security.CallShapes.<init>:()V
+000708: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00070e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #2              : (in Ldev/appchk/fixture/security/CallShapes;)
+      name          : 'all'
+      type          : '(Ljava/lang/String;Z)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 2
+      ins           : 2
+      outs          : 1
+      insns size    : 19 16-bit code units
+000710:                                        |[000710] dev.appchk.fixture.security.CallShapes.all:(Ljava/lang/String;Z)V
+000720: 7110 3300 0000                         |0000: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+000726: 3801 0500                              |0003: if-eqz v1, 0008 // +0005
+00072a: 1a00 0500                              |0005: const-string v0, "AES/GCM/NoPadding" // string@0005
+00072e: 2803                                   |0007: goto 000a // +0003
+000730: 1a00 0700                              |0008: const-string v0, "Blowfish/ECB/NoPadding" // string@0007
+000734: 7110 3300 0000                         |000a: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+00073a: 6200 0000                              |000d: sget-object v0, Ldev/appchk/fixture/security/CallShapes;.configured:Ljava/lang/String; // field@0000
+00073e: 7110 3300 0000                         |000f: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+000744: 0e00                                   |0012: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 9
+
+Class #1            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/Crypto;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+    #0              : (in Ldev/appchk/fixture/security/Crypto;)
+      name          : 'ECB'
+      type          : 'Ljava/lang/String;'
+      access        : 0x0018 (STATIC FINAL)
+      value         : "AES/ECB/PKCS5Padding"
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/Crypto;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000748:                                        |[000748] dev.appchk.fixture.security.Crypto.<init>:()V
+000758: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+00075e: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/security/Crypto;)
+      name          : 'all'
+      type          : '()V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 3
+      ins           : 0
+      outs          : 2
+      insns size    : 62 16-bit code units
+000760:                                        |[000760] dev.appchk.fixture.security.Crypto.all:()V
+000770: 1a00 0400                              |0000: const-string v0, "AES/ECB/PKCS5Padding" // string@0004
+000774: 7110 3300 0000                         |0002: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+00077a: 1a00 0c00                              |0005: const-string v0, "DES/CBC/PKCS5Padding" // string@000c
+00077e: 7110 3300 0000                         |0007: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+000784: 1a00 0200                              |000a: const-string v0, "AES" // string@0002
+000788: 7110 3300 0000                         |000c: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+00078e: 1a00 3f00                              |000f: const-string v0, "RC4" // string@003f
+000792: 1a01 0600                              |0011: const-string v1, "AndroidOpenSSL" // string@0006
+000796: 7120 3400 1000                         |0013: invoke-static {v0, v1}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0034
+00079c: 1a00 4000                              |0016: const-string v0, "RSA/ECB/OAEPWithSHA-256AndMGF1Padding" // string@0040
+0007a0: 7110 3300 0000                         |0018: invoke-static {v0}, Ljavax/crypto/Cipher;.getInstance:(Ljava/lang/String;)Ljavax/crypto/Cipher; // method@0033
+0007a6: 1a00 3d00                              |001b: const-string v0, "MD5" // string@003d
+0007aa: 7110 3000 0000                         |001d: invoke-static {v0}, Ljava/security/MessageDigest;.getInstance:(Ljava/lang/String;)Ljava/security/MessageDigest; // method@0030
+0007b0: 0c00                                   |0020: move-result-object v0
+0007b2: 1211                                   |0021: const/4 v1, #int 1 // #1
+0007b4: 2312 2a00                              |0022: new-array v2, v1, [B // type@002a
+0007b8: 6e20 2f00 2000                         |0024: invoke-virtual {v0, v2}, Ljava/security/MessageDigest;.digest:([B)[B // method@002f
+0007be: 1a00 4100                              |0027: const-string v0, "SHA-1" // string@0041
+0007c2: 7110 3000 0000                         |0029: invoke-static {v0}, Ljava/security/MessageDigest;.getInstance:(Ljava/lang/String;)Ljava/security/MessageDigest; // method@0030
+0007c8: 0c00                                   |002c: move-result-object v0
+0007ca: 2311 2a00                              |002d: new-array v1, v1, [B // type@002a
+0007ce: 6e20 2f00 1000                         |002f: invoke-virtual {v0, v1}, Ljava/security/MessageDigest;.digest:([B)[B // method@002f
+0007d4: 2200 2600                              |0032: new-instance v0, Ljava/util/Random; // type@0026
+0007d8: 7010 3100 0000                         |0034: invoke-direct {v0}, Ljava/util/Random;.<init>:()V // method@0031
+0007de: 6e10 3200 0000                         |0037: invoke-virtual {v0}, Ljava/util/Random;.nextInt:()I // method@0032
+0007e4: 7100 2900 0000                         |003a: invoke-static {}, Ljava/lang/Math;.random:()D // method@0029
+0007ea: 0e00                                   |003d: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 10
+
+Class #2            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/InsecureClient;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Landroid/webkit/WebViewClient;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/InsecureClient;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+0007ec:                                        |[0007ec] dev.appchk.fixture.security.InsecureClient.<init>:()V
+0007fc: 7010 1400 0000                         |0000: invoke-direct {v0}, Landroid/webkit/WebViewClient;.<init>:()V // method@0014
+000802: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/security/InsecureClient;)
+      name          : 'onReceivedSslError'
+      type          : '(Landroid/webkit/WebView;Landroid/webkit/SslErrorHandler;Landroid/net/http/SslError;)V'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 4
+      ins           : 4
+      outs          : 1
+      insns size    : 4 16-bit code units
+000804:                                        |[000804] dev.appchk.fixture.security.InsecureClient.onReceivedSslError:(Landroid/webkit/WebView;Landroid/webkit/SslErrorHandler;Landroid/net/http/SslError;)V
+000814: 6e10 0800 0200                         |0000: invoke-virtual {v2}, Landroid/webkit/SslErrorHandler;.proceed:()V // method@0008
+00081a: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  source_file_idx   : 17
+
+Class #3            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/Logging;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/Logging;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+00081c:                                        |[00081c] dev.appchk.fixture.security.Logging.<init>:()V
+00082c: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+000832: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/security/Logging;)
+      name          : 'all'
+      type          : '(Ljava/lang/String;)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 2
+      insns size    : 30 16-bit code units
+000834:                                        |[000834] dev.appchk.fixture.security.Logging.all:(Ljava/lang/String;)V
+000844: 2200 2200                              |0000: new-instance v0, Ljava/lang/StringBuilder; // type@0022
+000848: 1a01 7200                              |0002: const-string v1, "token=" // string@0072
+00084c: 7020 2c00 1000                         |0004: invoke-direct {v0, v1}, Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V // method@002c
+000852: 6e20 2d00 2000                         |0007: invoke-virtual {v0, v2}, Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder; // method@002d
+000858: 6e10 2e00 0000                         |000a: invoke-virtual {v0}, Ljava/lang/StringBuilder;.toString:()Ljava/lang/String; // method@002e
+00085e: 0c00                                   |000d: move-result-object v0
+000860: 1a01 4200                              |000e: const-string v1, "Security" // string@0042
+000864: 7120 0600 0100                         |0010: invoke-static {v1, v0}, Landroid/util/Log;.d:(Ljava/lang/String;Ljava/lang/String;)I // method@0006
+00086a: 1a00 7500                              |0013: const-string v0, "verbose" // string@0075
+00086e: 7120 0700 0100                         |0015: invoke-static {v1, v0}, Landroid/util/Log;.v:(Ljava/lang/String;Ljava/lang/String;)I // method@0007
+000874: 6200 0200                              |0018: sget-object v0, Ljava/lang/System;.out:Ljava/io/PrintStream; // field@0002
+000878: 6e20 2800 2000                         |001a: invoke-virtual {v0, v2}, Ljava/io/PrintStream;.println:(Ljava/lang/String;)V // method@0028
+00087e: 0e00                                   |001d: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 60
+
+Class #4            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/MainActivity;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Landroid/app/Activity;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/MainActivity;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000880:                                        |[000880] dev.appchk.fixture.security.MainActivity.<init>:()V
+000890: 7010 0000 0000                         |0000: invoke-direct {v0}, Landroid/app/Activity;.<init>:()V // method@0000
+000896: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/security/MainActivity;)
+      name          : 'onCreate'
+      type          : '(Landroid/os/Bundle;)V'
+      access        : 0x0004 (PROTECTED)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 3
+      insns size    : 45 16-bit code units
+000898:                                        |[000898] dev.appchk.fixture.security.MainActivity.onCreate:(Landroid/os/Bundle;)V
+0008a8: 6f20 0100 2100                         |0000: invoke-super {v1, v2}, Landroid/app/Activity;.onCreate:(Landroid/os/Bundle;)V // method@0001
+0008ae: 7100 1900 0000                         |0003: invoke-static {}, Ldev/appchk/fixture/security/Crypto;.all:()V // method@0019
+0008b4: 1a02 0300                              |0006: const-string v2, "AES/CBC/PKCS5Padding" // string@0003
+0008b8: 1210                                   |0008: const/4 v0, #int 1 // #1
+0008ba: 7120 1700 0200                         |0009: invoke-static {v2, v0}, Ldev/appchk/fixture/security/CallShapes;.all:(Ljava/lang/String;Z)V // method@0017
+0008c0: 7110 2200 0100                         |000c: invoke-static {v1}, Ldev/appchk/fixture/security/Storage;.all:(Landroid/content/Context;)V // method@0022
+0008c6: 1a02 4e00                              |000f: const-string v2, "activity.txt" // string@004e
+0008ca: 6e30 2000 2100                         |0011: invoke-virtual {v1, v2, v0}, Ldev/appchk/fixture/security/MainActivity;.openFileOutput:(Ljava/lang/String;I)Ljava/io/FileOutputStream; // method@0020
+0008d0: 0c02                                   |0014: move-result-object v2
+0008d2: 6e10 2700 0200                         |0015: invoke-virtual {v2}, Ljava/io/FileOutputStream;.close:()V // method@0027
+0008d8: 2202 0c00                              |0018: new-instance v2, Landroid/webkit/WebView; // type@000c
+0008dc: 7020 0f00 1200                         |001a: invoke-direct {v2, v1}, Landroid/webkit/WebView;.<init>:(Landroid/content/Context;)V // method@000f
+0008e2: 7110 2600 0200                         |001d: invoke-static {v2}, Ldev/appchk/fixture/security/WebViews;.all:(Landroid/webkit/WebView;)V // method@0026
+0008e8: 1a02 6600                              |0020: const-string v2, "secret" // string@0066
+0008ec: 7110 1d00 0200                         |0022: invoke-static {v2}, Ldev/appchk/fixture/security/Logging;.all:(Ljava/lang/String;)V // method@001d
+0008f2: 0e00                                   |0025: return-void
+0008f4: 0d02                                   |0026: move-exception v2
+0008f6: 2200 2000                              |0027: new-instance v0, Ljava/lang/RuntimeException; // type@0020
+0008fa: 7020 2b00 2000                         |0029: invoke-direct {v0, v2}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/Throwable;)V // method@002b
+000900: 2700                                   |002c: throw v0
+      catches       : 1
+        0x0003 - 0x0025
+          Ljava/lang/Exception; -> 0x0026
+
+  source_file_idx   : 62
+
+Class #5            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/Storage;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/Storage;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000910:                                        |[000910] dev.appchk.fixture.security.Storage.<init>:()V
+000920: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+000926: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/security/Storage;)
+      name          : 'all'
+      type          : '(Landroid/content/Context;)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 3
+      insns size    : 24 16-bit code units
+000928:                                        |[000928] dev.appchk.fixture.security.Storage.all:(Landroid/content/Context;)V
+000938: 1a00 6f00                              |0000: const-string v0, "shared.txt" // string@006f
+00093c: 1211                                   |0002: const/4 v1, #int 1 // #1
+00093e: 6e30 0400 0201                         |0003: invoke-virtual {v2, v0, v1}, Landroid/content/Context;.openFileOutput:(Ljava/lang/String;I)Ljava/io/FileOutputStream; // method@0004
+000944: 0c00                                   |0006: move-result-object v0
+000946: 6e10 2700 0000                         |0007: invoke-virtual {v0}, Ljava/io/FileOutputStream;.close:()V // method@0027
+00094c: 1a00 6200                              |000a: const-string v0, "prefs" // string@0062
+000950: 1221                                   |000c: const/4 v1, #int 2 // #2
+000952: 6e30 0300 0201                         |000d: invoke-virtual {v2, v0, v1}, Landroid/content/Context;.getSharedPreferences:(Ljava/lang/String;I)Landroid/content/SharedPreferences; // method@0003
+000958: 7100 0500 0000                         |0010: invoke-static {}, Landroid/os/Environment;.getExternalStorageDirectory:()Ljava/io/File; // method@0005
+00095e: 1200                                   |0013: const/4 v0, #int 0 // #0
+000960: 6e20 0200 0200                         |0014: invoke-virtual {v2, v0}, Landroid/content/Context;.getExternalFilesDir:(Ljava/lang/String;)Ljava/io/File; // method@0002
+000966: 0e00                                   |0017: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 67
+
+Class #6            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/WebViews$Bridge;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/WebViews$Bridge;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000980:                                        |[000980] dev.appchk.fixture.security.WebViews$Bridge.<init>:()V
+000990: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+000996: 0e00                                   |0003: return-void
+      catches       : (none)
+
+  Virtual methods   -
+    #0              : (in Ldev/appchk/fixture/security/WebViews$Bridge;)
+      name          : 'token'
+      type          : '()Ljava/lang/String;'
+      access        : 0x0001 (PUBLIC)
+      code          -
+      registers     : 2
+      ins           : 1
+      outs          : 0
+      insns size    : 3 16-bit code units
+000968:                                        |[000968] dev.appchk.fixture.security.WebViews$Bridge.token:()Ljava/lang/String;
+000978: 1a00 7100                              |0000: const-string v0, "token" // string@0071
+00097c: 1100                                   |0002: return-object v0
+      catches       : (none)
+
+  source_file_idx   : 74
+
+Class #7            -
+  Class descriptor  : 'Ldev/appchk/fixture/security/WebViews;'
+  Access flags      : 0x0010 (FINAL)
+  Superclass        : 'Ljava/lang/Object;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+  Direct methods    -
+    #0              : (in Ldev/appchk/fixture/security/WebViews;)
+      name          : '<init>'
+      type          : '()V'
+      access        : 0x10000 (CONSTRUCTOR)
+      code          -
+      registers     : 1
+      ins           : 1
+      outs          : 1
+      insns size    : 4 16-bit code units
+000998:                                        |[000998] dev.appchk.fixture.security.WebViews.<init>:()V
+0009a8: 7010 2a00 0000                         |0000: invoke-direct {v0}, Ljava/lang/Object;.<init>:()V // method@002a
+0009ae: 0e00                                   |0003: return-void
+      catches       : (none)
+
+    #1              : (in Ldev/appchk/fixture/security/WebViews;)
+      name          : 'all'
+      type          : '(Landroid/webkit/WebView;)V'
+      access        : 0x0008 (STATIC)
+      code          -
+      registers     : 4
+      ins           : 1
+      outs          : 3
+      insns size    : 46 16-bit code units
+0009b0:                                        |[0009b0] dev.appchk.fixture.security.WebViews.all:(Landroid/webkit/WebView;)V
+0009c0: 6e10 1100 0300                         |0000: invoke-virtual {v3}, Landroid/webkit/WebView;.getSettings:()Landroid/webkit/WebSettings; // method@0011
+0009c6: 0c00                                   |0003: move-result-object v0
+0009c8: 1211                                   |0004: const/4 v1, #int 1 // #1
+0009ca: 6e20 0d00 1000                         |0005: invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;.setJavaScriptEnabled:(Z)V // method@000d
+0009d0: 6e20 0b00 1000                         |0008: invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;.setAllowFileAccessFromFileURLs:(Z)V // method@000b
+0009d6: 6e20 0c00 1000                         |000b: invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;.setAllowUniversalAccessFromFileURLs:(Z)V // method@000c
+0009dc: 6e20 0a00 1000                         |000e: invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;.setAllowFileAccess:(Z)V // method@000a
+0009e2: 6e20 0900 1000                         |0011: invoke-virtual {v0, v1}, Landroid/webkit/WebSettings;.setAllowContentAccess:(Z)V // method@0009
+0009e8: 1202                                   |0014: const/4 v2, #int 0 // #0
+0009ea: 6e20 0e00 2000                         |0015: invoke-virtual {v0, v2}, Landroid/webkit/WebSettings;.setSafeBrowsingEnabled:(Z)V // method@000e
+0009f0: 2200 1800                              |0018: new-instance v0, Ldev/appchk/fixture/security/WebViews$Bridge; // type@0018
+0009f4: 7010 2300 0000                         |001a: invoke-direct {v0}, Ldev/appchk/fixture/security/WebViews$Bridge;.<init>:()V // method@0023
+0009fa: 1a02 5200                              |001d: const-string v2, "bridge" // string@0052
+0009fe: 6e30 1000 0302                         |001f: invoke-virtual {v3, v0, v2}, Landroid/webkit/WebView;.addJavascriptInterface:(Ljava/lang/Object;Ljava/lang/String;)V // method@0010
+000a04: 2200 1400                              |0022: new-instance v0, Ldev/appchk/fixture/security/InsecureClient; // type@0014
+000a08: 7010 1a00 0000                         |0024: invoke-direct {v0}, Ldev/appchk/fixture/security/InsecureClient;.<init>:()V // method@001a
+000a0e: 6e20 1300 0300                         |0027: invoke-virtual {v3, v0}, Landroid/webkit/WebView;.setWebViewClient:(Landroid/webkit/WebViewClient;)V // method@0013
+000a14: 7110 1200 0100                         |002a: invoke-static {v1}, Landroid/webkit/WebView;.setWebContentsDebuggingEnabled:(Z)V // method@0012
+000a1a: 0e00                                   |002d: return-void
+      catches       : (none)
+
+  Virtual methods   -
+  source_file_idx   : 74
+

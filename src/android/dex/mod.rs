@@ -29,7 +29,7 @@ use sha1::{Digest, Sha1};
 
 use crate::android::chunk::{u16_at, u32_at};
 use code::{CodeScan, MemberId, ProtoId};
-pub use code::{Reference, Target};
+pub use code::{Constant, ConstantArgument, Reference, Target};
 use header::CONTAINER_VERSION;
 pub use header::{Header, Table};
 pub use package::{CodeSummary, DexEntry, PackageCount, ShadowedClass, read_dex_files, summarise};
@@ -423,6 +423,8 @@ pub struct DexFile {
     references: Vec<Reference>,
     /// (method ID, string ID) for each string a method's code loads, sorted.
     string_uses: Vec<(u32, u32)>,
+    /// Calls with arguments that are constants at the call site, sorted.
+    constant_arguments: Vec<ConstantArgument>,
     methods_with_code: usize,
     /// Method IDs of the methods the file's classes define.
     defined_methods: Vec<u32>,
@@ -558,6 +560,7 @@ impl DexFile {
             methods: Vec::new(),
             references: Vec::new(),
             string_uses: Vec::new(),
+            constant_arguments: Vec::new(),
             methods_with_code: 0,
             defined_methods: Vec::new(),
         };
@@ -647,6 +650,7 @@ impl DexFile {
         self.defined_methods = scan.defined_methods;
         self.references = scan.references.into_iter().collect();
         self.string_uses = scan.string_uses.into_iter().collect();
+        self.constant_arguments = scan.constant_arguments.into_iter().collect();
     }
 
     /// Reads the class definitions, their interface lists, and checks for redefinitions.
@@ -807,6 +811,12 @@ impl DexFile {
     /// (method ID, string ID) for each string a method's code loads (`const-string`), sorted.
     pub fn string_uses(&self) -> &[(u32, u32)] {
         &self.string_uses
+    }
+
+    /// Calls whose arguments are constants at the call site, within the calling method (see
+    /// the `code` module for what counts), sorted by caller, then callee.
+    pub fn constant_arguments(&self) -> &[ConstantArgument] {
+        &self.constant_arguments
     }
 
     /// Strings that are data rather than names: every string ID except type descriptors,

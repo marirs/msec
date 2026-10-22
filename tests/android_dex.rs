@@ -574,9 +574,11 @@ fn code_checks_find_what_google_play_flags() {
 
     let mut archive = ZipArchive::open(std::io::Cursor::new(CODE_APK), Limits::default()).unwrap();
     let apk = Apk::read(&mut archive);
+    // The security rules have their own fixtures (tests/android_security.rs).
     let findings: Vec<(CodeRule, Option<String>, Vec<String>)> = apk
         .code_findings()
         .into_iter()
+        .filter(|finding| !CodeRule::SECURITY.contains(&finding.rule))
         .map(|finding| {
             let callers = finding
                 .callers

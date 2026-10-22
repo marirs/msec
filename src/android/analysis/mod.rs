@@ -10,12 +10,13 @@ pub mod code_checks;
 pub mod manifest_checks;
 pub mod native_checks;
 pub mod network;
+pub mod security_checks;
 pub mod signing_checks;
 pub mod store_checks;
 
 pub use code_checks::{
-    Caller, CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT, analyse_code,
-    dex_optimization, is_game,
+    Caller, CodeEvidence, CodeFinding, CodeRule, DexOptimization, PLAY_DEX_MINIMUM_PERCENT,
+    analyse_code, dex_optimization, is_game,
 };
 pub use manifest_checks::{
     ExportReason, ManifestFinding, ManifestRule, PermissionLevel, Protection, analyse_manifest,

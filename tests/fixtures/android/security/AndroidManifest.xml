@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- msec's security code fixture (positive): code using broken ciphers and modes, weak hashes,
+     java.util.Random, world-readable files, external storage, a WebView JavaScript bridge with
+     relaxed file access, debugging, an SSL error handler that proceeds, Safe Browsing off, and
+     logging. Built by ../build_security.sh. minSdk 16 puts the bridge below API 17, where every
+     public method of a bridged object is reachable; targetSdk 23 keeps world-readable modes
+     working (Android 7 refuses them for apps targeting API 24+). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.appchk.fixture.security"
+    android:versionCode="1"
+    android:versionName="1.0">
+  <uses-sdk android:minSdkVersion="16" android:targetSdkVersion="23"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+  <application android:label="@string/app_name">
+    <meta-data android:name="android.webkit.WebView.EnableSafeBrowsing" android:value="false"/>
+    <activity android:name=".MainActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
