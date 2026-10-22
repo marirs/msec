@@ -84,14 +84,19 @@ impl UncheckedCheck {
             Self::MethodNames => vec![
                 AppRule::RequiredReasonUndeclared.key(),
                 AppRule::PurposeStringMissing.key(),
+                AppRule::AccountDeletionNotSeen.key(),
             ],
-            Self::Strings => vec![BinaryRule::WebViewFileOriginRelaxed.key()],
+            Self::Strings => vec![
+                BinaryRule::WebViewFileOriginRelaxed.key(),
+                AppRule::PrivateFrameworkPath.key(),
+            ],
             Self::Imports => BinaryRule::READ_IMPORTS
                 .iter()
                 .map(|rule| rule.key())
                 .chain([
                     AppRule::RequiredReasonUndeclared.key(),
                     AppRule::PurposeStringMissing.key(),
+                    AppRule::ThirdPartyLoginWithoutEquivalent.key(),
                 ])
                 .collect(),
             Self::SignerSignature => vec![

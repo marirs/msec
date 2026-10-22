@@ -15,6 +15,7 @@ use std::io::{Read, Seek};
 use super::analysis::WEBVIEW_FILE_ORIGIN_KEYS;
 use super::purpose_strings::{ResourceUse, uses_in};
 use super::required_reason::{ApiUse, apis_in};
+use super::store_leads::{ACCOUNT_SELECTORS, PRIVATE_FRAMEWORKS};
 use crate::archive::ZipArchive;
 use crate::macho::signature::{
     CodeSignature, SLOT_DER_ENTITLEMENTS, SLOT_ENTITLEMENTS, SLOT_INFO_PLIST, SLOT_REQUIREMENTS,
@@ -64,6 +65,11 @@ pub struct BundleBinary {
     /// The WebKit preferences relaxing file origin rules that a C string names
     /// ([`super::analysis::WEBVIEW_FILE_ORIGIN_KEYS`]), sorted.
     pub webview_file_origin_keys: Vec<String>,
+    /// C strings naming a path under /System/Library/PrivateFrameworks, sorted.
+    pub private_framework_strings: Vec<String>,
+    /// Objective-C selectors that create or delete accounts
+    /// ([`super::store_leads::ACCOUNT_SELECTORS`]) among the method names, sorted.
+    pub account_selectors: Vec<String>,
 }
 
 impl BundleBinary {
@@ -162,6 +168,8 @@ pub(super) fn read_binary<R: Read + Seek>(
         encrypted_sections: Vec::new(),
         unreadable_sections: Vec::new(),
         webview_file_origin_keys: Vec::new(),
+        private_framework_strings: Vec::new(),
+        account_selectors: Vec::new(),
     };
     let Some(entry) = archive.find(path) else {
         return binary;
@@ -217,6 +225,8 @@ impl BundleBinary {
             encrypted_sections: Vec::new(),
             unreadable_sections: Vec::new(),
             webview_file_origin_keys: Vec::new(),
+            private_framework_strings: Vec::new(),
+            account_selectors: Vec::new(),
         };
         let file = match parse(bytes) {
             Ok(file) => file,
@@ -252,13 +262,17 @@ impl BundleBinary {
                 .then(|| section(image, slice_bytes, "__cstring"))
                 .flatten();
             if let Some(c_strings) = c_strings {
-                binary.webview_file_origin_keys.extend(
-                    c_strings
-                        .split(|byte| *byte == 0)
-                        .filter_map(|string| std::str::from_utf8(string).ok())
-                        .filter(|string| WEBVIEW_FILE_ORIGIN_KEYS.contains(string))
-                        .map(str::to_owned),
-                );
+                for string in c_strings
+                    .split(|byte| *byte == 0)
+                    .filter_map(|string| std::str::from_utf8(string).ok())
+                {
+                    if WEBVIEW_FILE_ORIGIN_KEYS.contains(&string) {
+                        binary.webview_file_origin_keys.push(string.to_owned());
+                    }
+                    if string.starts_with(PRIVATE_FRAMEWORKS) {
+                        binary.private_framework_strings.push(string.to_owned());
+                    }
+                }
             }
             // Encrypted method names are ciphertext: imports are still read (the symbol
             // table is never encrypted), selectors are not, which `encrypted_sections` records.
@@ -266,6 +280,15 @@ impl BundleBinary {
                 .all(|section| !image.section_encrypted(section))
                 .then(|| section(image, slice_bytes, "__objc_methname"))
                 .flatten();
+            if let Some(method_names) = method_names {
+                binary.account_selectors.extend(
+                    method_names
+                        .split(|byte| *byte == 0)
+                        .filter_map(|name| std::str::from_utf8(name).ok())
+                        .filter(|name| ACCOUNT_SELECTORS.contains(name))
+                        .map(str::to_owned),
+                );
+            }
             binary
                 .required_reason_apis
                 .extend(apis_in(image, method_names));
@@ -287,6 +310,10 @@ impl BundleBinary {
         binary.unreadable_sections.dedup();
         binary.webview_file_origin_keys.sort();
         binary.webview_file_origin_keys.dedup();
+        binary.private_framework_strings.sort();
+        binary.private_framework_strings.dedup();
+        binary.account_selectors.sort();
+        binary.account_selectors.dedup();
         binary.macho = Ok(file);
         binary
     }

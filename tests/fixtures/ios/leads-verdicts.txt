@@ -1,0 +1,37 @@
+positive Fixture:
+  library /System/Library/Frameworks/Foundation.framework/Foundation
+  library @rpath/Stripe.framework/Stripe
+  library @rpath/GoogleSignIn.framework/GoogleSignIn
+  library /System/Library/PrivateFrameworks/AppchkFixture.framework/AppchkFixture
+  library /usr/lib/libobjc.A.dylib
+  library /usr/lib/libSystem.B.dylib
+  library /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+  class GIDSignIn
+  selector createUserWithEmail:password:completion:
+  string /System/Library/PrivateFrameworks/FrontBoardServices.framework/FrontBoardServices
+clean Fixture:
+  library /System/Library/Frameworks/Foundation.framework/Foundation
+  library @rpath/Stripe.framework/Stripe
+  library @rpath/GoogleSignIn.framework/GoogleSignIn
+  library /System/Library/Frameworks/StoreKit.framework/StoreKit
+  library /System/Library/Frameworks/AuthenticationServices.framework/AuthenticationServices
+  library /usr/lib/libobjc.A.dylib
+  library /usr/lib/libSystem.B.dylib
+  library /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+  class ASAuthorizationAppleIDProvider
+  class GIDSignIn
+  class SKPaymentQueue
+  selector createUserWithEmail:password:completion:
+  selector deleteWithCompletion:
+incomplete Fixture:
+  library /System/Library/Frameworks/Foundation.framework/Foundation
+  library @rpath/Stripe.framework/Stripe
+  library @rpath/GoogleSignIn.framework/GoogleSignIn
+  library /System/Library/Frameworks/StoreKit.framework/StoreKit
+  library /System/Library/Frameworks/AuthenticationServices.framework/AuthenticationServices
+  library /usr/lib/libobjc.A.dylib
+  library /usr/lib/libSystem.B.dylib
+  library /System/Library/Frameworks/CoreFoundation.framework/CoreFoundation
+  class ASAuthorizationAppleIDProvider
+  class GIDSignIn
+  class SKPaymentQueue

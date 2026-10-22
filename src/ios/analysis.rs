@@ -789,6 +789,23 @@ pub enum AppRule {
     AtsWeakTlsDomain,
     /// An exception domain does not require forward secrecy (MobSF).
     AtsForwardSecrecyDisabled,
+    /// A third-party payment SDK ships in the app and nothing links StoreKit: a lead, since
+    /// in-app purchase is required for digital goods only (guideline 3.1.1) (msec). See
+    /// [`super::store_leads`] for this and the rules below.
+    PaymentSdkWithoutStoreKit,
+    /// A third-party login SDK is used and nothing uses Sign in with Apple: a lead, since
+    /// guideline 4.8 requires an equivalent privacy-preserving login option, which may be
+    /// another, and has exemptions (msec).
+    ThirdPartyLoginWithoutEquivalent,
+    /// Code creates accounts through a recognised SDK and no recognised deletion call is seen:
+    /// a lead (guideline 5.1.1(v)) (msec).
+    AccountDeletionNotSeen,
+    /// An executable links a library from /System/Library/PrivateFrameworks: non-public API,
+    /// which App Store Connect rejects (guideline 2.5.1, ITMS-90338) (msec).
+    PrivateFrameworkLinked,
+    /// A C string names a path in /System/Library/PrivateFrameworks, as code loading one at
+    /// run time would: a lead (msec).
+    PrivateFrameworkPath,
 }
 
 impl AppRule {
@@ -820,6 +837,11 @@ impl AppRule {
             Self::AtsInsecureHttpDomain => "msec_ios_ats_insecure_http_domain",
             Self::AtsWeakTlsDomain => "msec_ios_ats_weak_tls_domain",
             Self::AtsForwardSecrecyDisabled => "msec_ios_ats_forward_secrecy_disabled",
+            Self::PaymentSdkWithoutStoreKit => "msec_ios_store_payment_sdk_without_storekit",
+            Self::ThirdPartyLoginWithoutEquivalent => "msec_ios_store_third_party_login",
+            Self::AccountDeletionNotSeen => "msec_ios_store_account_deletion_not_seen",
+            Self::PrivateFrameworkLinked => "msec_ios_private_framework_linked",
+            Self::PrivateFrameworkPath => "msec_ios_private_framework_path",
         }
     }
 
@@ -843,14 +865,19 @@ impl AppRule {
             | Self::UploadRequirementUnmet
             | Self::AtsArbitraryLoads
             | Self::AtsInsecureHttpDomain
-            | Self::AtsWeakTlsDomain => Severity::High,
+            | Self::AtsWeakTlsDomain
+            | Self::PrivateFrameworkLinked => Severity::High,
             Self::AtsWebContent
             | Self::AtsMedia
             | Self::AtsForwardSecrecyDisabled
             | Self::UploadRequirementUpcoming => Severity::Warning,
             Self::ProfileDistribution
             | Self::AtsArbitraryLoadsIgnored
-            | Self::AtsLocalNetworking => Severity::Info,
+            | Self::AtsLocalNetworking
+            | Self::PaymentSdkWithoutStoreKit
+            | Self::ThirdPartyLoginWithoutEquivalent
+            | Self::AccountDeletionNotSeen
+            | Self::PrivateFrameworkPath => Severity::Info,
         }
     }
 
@@ -865,6 +892,20 @@ impl AppRule {
             | Self::AtsWeakTlsDomain
             | Self::AtsForwardSecrecyDisabled => Origin::MobSf,
             _ => Origin::Msec,
+        }
+    }
+
+    /// What a finding of this rule rests on, for the store leads and private frameworks;
+    /// `None` for the others (profiles, ATS, privacy manifests: declarations, not code).
+    pub fn evidence(self) -> Option<BinaryEvidence> {
+        match self {
+            Self::PaymentSdkWithoutStoreKit
+            | Self::ThirdPartyLoginWithoutEquivalent
+            | Self::PrivateFrameworkLinked => Some(BinaryEvidence::Import),
+            Self::AccountDeletionNotSeen | Self::PrivateFrameworkPath => {
+                Some(BinaryEvidence::String)
+            }
+            _ => None,
         }
     }
 }
@@ -892,6 +933,7 @@ pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
     purpose_string_checks(app, &mut findings);
     tracking_checks(app, &mut findings);
     upload_requirement_checks(app, today, &mut findings);
+    findings.extend(super::store_leads::analyse_store_leads(app));
     findings
 }
 
@@ -1028,7 +1070,7 @@ fn tracking_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
             location: manifest.path.clone(),
             subject: None,
             detail: format!(
-                "{declared}, but no executable uses App Tracking Transparency                  (ATTrackingManager) to ask the user's permission, which tracking requires"
+                "{declared}, but no executable uses App Tracking Transparency (ATTrackingManager) to ask the user's permission, which tracking requires"
             ),
         });
     }

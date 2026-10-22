@@ -21,6 +21,7 @@ pub mod privacy;
 pub mod profile;
 pub mod purpose_strings;
 pub mod required_reason;
+pub mod store_leads;
 pub mod upload_requirements;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
