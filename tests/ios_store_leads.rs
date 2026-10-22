@@ -159,3 +159,32 @@ fn encrypted_selectors_and_strings_are_unchecked() {
             .contains(&AppRule::PrivateFrameworkPath.key())
     );
 }
+
+/// Custom URL schemes: both apps register "leads" (a finding each); the clean one also has
+/// universal links, read from its entitlements as codesign prints them, and says so; an app
+/// without URL types has none.
+#[test]
+fn custom_url_schemes_and_universal_links() {
+    let oracle = oracle();
+    assert!(oracle["positive Fixture"].contains("url-scheme leads"));
+    assert!(oracle["clean Fixture"].contains("associated-domain applinks:leads.example.com"));
+    let scheme = |name: &str| -> Option<(String, String)> {
+        let ipa = read_ipa(name);
+        analyse_app(ipa.app.as_ref().unwrap(), "2026-10-22")
+            .into_iter()
+            .find(|finding| finding.rule == AppRule::CustomUrlScheme)
+            .map(|finding| (finding.subject.unwrap(), finding.detail))
+    };
+    let (subject, detail) = scheme("leads.ipa").unwrap();
+    assert_eq!(subject, "leads");
+    assert!(detail.contains("has no universal links"));
+    let (_, detail) = scheme("leads-clean.ipa").unwrap();
+    assert!(detail.contains("also has universal links"));
+    assert_eq!(scheme("security.ipa"), None);
+    let clean = read_ipa("leads-clean.ipa");
+    assert_eq!(
+        msec::ios::associated_domains(clean.app.as_ref().unwrap()),
+        ["applinks:leads.example.com"]
+    );
+    assert!(msec::ios::associated_domains(read_ipa("leads.ipa").app.as_ref().unwrap()).is_empty());
+}

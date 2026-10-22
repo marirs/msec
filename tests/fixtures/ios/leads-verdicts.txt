@@ -9,6 +9,7 @@ positive Fixture:
   class GIDSignIn
   selector createUserWithEmail:password:completion:
   string /System/Library/PrivateFrameworks/FrontBoardServices.framework/FrontBoardServices
+  url-scheme leads
 clean Fixture:
   library /System/Library/Frameworks/Foundation.framework/Foundation
   library @rpath/Stripe.framework/Stripe
@@ -23,6 +24,8 @@ clean Fixture:
   class SKPaymentQueue
   selector createUserWithEmail:password:completion:
   selector deleteWithCompletion:
+  associated-domain applinks:leads.example.com
+  url-scheme leads
 incomplete Fixture:
   library /System/Library/Frameworks/Foundation.framework/Foundation
   library @rpath/Stripe.framework/Stripe
@@ -35,3 +38,5 @@ incomplete Fixture:
   class ASAuthorizationAppleIDProvider
   class GIDSignIn
   class SKPaymentQueue
+  associated-domain applinks:leads.example.com
+  url-scheme leads

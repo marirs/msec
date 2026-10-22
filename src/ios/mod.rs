@@ -25,6 +25,26 @@ pub mod store_leads;
 pub mod upload_requirements;
 
 pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
+
+/// The associated domains the main executable's entitlements list
+/// (`com.apple.developer.associated-domains`: `applinks:example.com`, `webcredentials:...`), as
+/// written; empty when it lists none or its entitlements could not be read.
+pub fn associated_domains(app: &AppBundle) -> Vec<String> {
+    app.binaries
+        .first()
+        .and_then(BundleBinary::entitlements)
+        .and_then(|plist| plist.as_ref().ok())
+        .and_then(|plist| plist.root.as_dictionary())
+        .and_then(|entitlements| entitlements.get("com.apple.developer.associated-domains"))
+        .and_then(crate::plist::Value::as_array)
+        .map(|domains| {
+            domains
+                .iter()
+                .filter_map(|domain| domain.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
 pub use info::{BundleInfo, WrongType};
 pub use ipa::{AppBundle, BundleComponent, ComponentKind, Ipa, IpaProblem, LocalizedInfo};
 pub use privacy::{AccessedApiType, CollectedDataType, PrivacyManifest};

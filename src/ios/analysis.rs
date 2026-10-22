@@ -806,6 +806,10 @@ pub enum AppRule {
     /// A C string names a path in /System/Library/PrivateFrameworks, as code loading one at
     /// run time would: a lead (msec).
     PrivateFrameworkPath,
+    /// The app registers custom URL schemes: any app can register the same scheme, so links to
+    /// it can be taken by another app, and its handler must validate what it receives (msec;
+    /// a lead, since the handler's validation is not read).
+    CustomUrlScheme,
 }
 
 impl AppRule {
@@ -842,6 +846,7 @@ impl AppRule {
             Self::AccountDeletionNotSeen => "msec_ios_store_account_deletion_not_seen",
             Self::PrivateFrameworkLinked => "msec_ios_private_framework_linked",
             Self::PrivateFrameworkPath => "msec_ios_private_framework_path",
+            Self::CustomUrlScheme => "msec_ios_custom_url_scheme",
         }
     }
 
@@ -877,7 +882,8 @@ impl AppRule {
             | Self::PaymentSdkWithoutStoreKit
             | Self::ThirdPartyLoginWithoutEquivalent
             | Self::AccountDeletionNotSeen
-            | Self::PrivateFrameworkPath => Severity::Info,
+            | Self::PrivateFrameworkPath
+            | Self::CustomUrlScheme => Severity::Info,
         }
     }
 
@@ -934,7 +940,39 @@ pub fn analyse_app(app: &AppBundle, today: &str) -> Vec<AppFinding> {
     tracking_checks(app, &mut findings);
     upload_requirement_checks(app, today, &mut findings);
     findings.extend(super::store_leads::analyse_store_leads(app));
+    url_scheme_checks(app, &mut findings);
     findings
+}
+
+/// The app's custom URL schemes (`CFBundleURLSchemes`), one finding naming them all, with
+/// whether the app also has universal links (`applinks:` associated domains), which iOS opens
+/// only in the app whose domain's file names it.
+fn url_scheme_checks(app: &AppBundle, findings: &mut Vec<AppFinding>) {
+    let Some(info) = &app.info else {
+        return;
+    };
+    if info.url_schemes.is_empty() {
+        return;
+    }
+    let universal_links = super::associated_domains(app)
+        .iter()
+        .any(|domain| domain.starts_with("applinks:"));
+    findings.push(AppFinding {
+        rule: AppRule::CustomUrlScheme,
+        location: format!("{}Info.plist", app.path),
+        subject: Some(info.url_schemes.join(", ")),
+        detail: format!(
+            "registers {}: any app can register the same scheme, so a link to it may open \
+             another app, and the handler must validate the URL and its source. {}",
+            info.url_schemes.join(", "),
+            if universal_links {
+                "The app also has universal links (applinks), which only it can claim."
+            } else {
+                "The app has no universal links (applinks associated domains), which only it \
+                 could claim."
+            }
+        ),
+    });
 }
 
 /// The bundle whose `Info.plist` holds the purpose strings for an executable's code: the

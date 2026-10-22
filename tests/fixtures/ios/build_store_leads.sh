@@ -9,7 +9,9 @@
 #   from leads/private.c for linking only, not shipped), and a C string naming
 #   FrontBoardServices.framework for dlopen;
 # - ipa/leads-clean.ipa (leads/clean/main.m): StoreKit and ASAuthorizationAppleIDProvider
-#   beside them, deleteWithCompletion: beside account creation, no private framework;
+#   beside them, deleteWithCompletion: beside account creation, no private framework, and
+#   universal links (leads/clean/entitlements.plist: applinks:leads.example.com);
+# Both apps register the custom URL scheme "leads".
 # - ipa/leads-incomplete.ipa: leads-clean.ipa after signing, with its main executable
 #   encrypted as the App Store delivers it (as build_encrypted.sh does): method names and C
 #   strings unreadable, imports and load commands readable.
@@ -37,6 +39,7 @@ import plistlib
 import sys
 from pathlib import Path
 app = Path(sys.argv[1])
+# Both apps register the custom URL scheme "leads".
 common = {"CFBundleInfoDictionaryVersion": "6.0", "CFBundleShortVersionString": "1.0",
           "CFBundleVersion": "1", "MinimumOSVersion": "17.0",
           "CFBundleSupportedPlatforms": ["iPhoneOS"], "DTPlatformName": "iphoneos",
@@ -45,7 +48,9 @@ def write(path, content):
     path.write_bytes(plistlib.dumps(content, fmt=plistlib.FMT_BINARY))
 write(app / "Info.plist", {**common, "CFBundleIdentifier": "dev.appchk.leads",
       "CFBundleExecutable": "Fixture", "CFBundleName": "Leads",
-      "CFBundlePackageType": "APPL", "UIDeviceFamily": [1], "LSRequiresIPhoneOS": True})
+      "CFBundlePackageType": "APPL", "UIDeviceFamily": [1], "LSRequiresIPhoneOS": True,
+      "CFBundleURLTypes": [{"CFBundleURLName": "dev.appchk.leads",
+                            "CFBundleURLSchemes": ["leads"]}]})
 for name in ("Stripe", "GoogleSignIn"):
     write(app / f"Frameworks/{name}.framework/Info.plist", {**common,
           "CFBundleIdentifier": f"dev.appchk.leads.{name.lower()}", "CFBundleExecutable": name,
@@ -53,9 +58,9 @@ for name in ("Stripe", "GoogleSignIn"):
 PY
 }
 
-build() { # main source, bundle, extra linker arguments...
-  source="$1" app="$2"
-  shift 2
+build() { # main source, bundle, entitlements ("" for none), extra linker arguments...
+  source="$1" app="$2" entitlements="$3"
+  shift 3
   mkdir -p "$app/Frameworks/Stripe.framework" "$app/Frameworks/GoogleSignIn.framework"
   $cc -dynamiclib -install_name @rpath/Stripe.framework/Stripe \
     -o "$app/Frameworks/Stripe.framework/Stripe" leads/stripe.c
@@ -66,12 +71,16 @@ build() { # main source, bundle, extra linker arguments...
   info "$app"
   codesign -s - -f --timestamp=none "$app/Frameworks/Stripe.framework" > /dev/null 2>&1
   codesign -s - -f --timestamp=none "$app/Frameworks/GoogleSignIn.framework" > /dev/null 2>&1
-  codesign -s - -f --timestamp=none "$app" > /dev/null 2>&1
+  if [ -n "$entitlements" ]; then
+    codesign -s - -f --timestamp=none --entitlements "$entitlements" "$app" > /dev/null 2>&1
+  else
+    codesign -s - -f --timestamp=none "$app" > /dev/null 2>&1
+  fi
 }
 
-build leads/main.m "$work/positive/Fixture.app" "$work/private/libAppchkFixture.dylib"
-build leads/clean/main.m "$work/clean/Fixture.app" -framework StoreKit \
-  -framework AuthenticationServices
+build leads/main.m "$work/positive/Fixture.app" "" "$work/private/libAppchkFixture.dylib"
+build leads/clean/main.m "$work/clean/Fixture.app" leads/clean/entitlements.plist \
+  -framework StoreKit -framework AuthenticationServices
 mkdir -p "$work/incomplete"
 cp -R "$work/clean/Fixture.app" "$work/incomplete/Fixture.app"
 incomplete="$work/incomplete/Fixture.app"
@@ -127,5 +136,18 @@ selectors='createUserWithEmail:password:completion:|deleteWithCompletion:'
     xcrun otool -v -s __TEXT __cstring "$path" 2> /dev/null \
       | grep -o '/System/Library/PrivateFrameworks/[^[:space:]]*' | sort -u \
       | sed 's/^/  string /' || true
+    # The key has dots, which plutil's key paths split on: read it with plistlib.
+    codesign -d --entitlements - --xml "$path" 2> /dev/null | python3 -I -c '
+import plistlib, sys
+data = sys.stdin.buffer.read()
+domains = plistlib.loads(data).get("com.apple.developer.associated-domains", []) if data else []
+for domain in domains:
+    print("  associated-domain " + domain)'
+    python3 -I -c '
+import plistlib, sys
+info = plistlib.load(open(sys.argv[1], "rb"))
+for kind in info.get("CFBundleURLTypes", []):
+    for scheme in kind.get("CFBundleURLSchemes", []):
+        print("  url-scheme " + scheme)' "$work/$variant/Fixture.app/Info.plist"
   done
 } > leads-verdicts.txt
