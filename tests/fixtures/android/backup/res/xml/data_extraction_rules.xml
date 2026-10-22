@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later: cloud backups only with end-to-end encryption, without the session
+     or the token store; device-to-device transfers of everything but the token store. -->
+<data-extraction-rules>
+  <cloud-backup disableIfNoEncryptionCapabilities="true">
+    <exclude domain="sharedpref" path="session.xml"/>
+    <exclude domain="file" path="tokens/"/>
+  </cloud-backup>
+  <device-transfer>
+    <exclude domain="file" path="tokens/"/>
+  </device-transfer>
+</data-extraction-rules>

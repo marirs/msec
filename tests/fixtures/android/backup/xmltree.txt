@@ -1,0 +1,50 @@
+== AndroidManifest.xml
+N: android=http://schemas.android.com/apk/res/android (line=5)
+  E: manifest (line=5)
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1
+    A: http://schemas.android.com/apk/res/android:versionName(0x0101021c)="1.0" (Raw: "1.0")
+    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=37
+    A: http://schemas.android.com/apk/res/android:compileSdkVersionCodename(0x01010573)="17" (Raw: "17")
+    A: package="dev.appchk.fixture.backup" (Raw: "dev.appchk.fixture.backup")
+    A: platformBuildVersionCode=37
+    A: platformBuildVersionName=17
+      E: uses-sdk (line=9)
+        A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=24
+        A: http://schemas.android.com/apk/res/android:targetSdkVersion(0x01010270)=36
+      E: application (line=10)
+        A: http://schemas.android.com/apk/res/android:label(0x01010001)=@0x7f010000
+        A: http://schemas.android.com/apk/res/android:fullBackupContent(0x010104eb)=@0x7f020000
+        A: http://schemas.android.com/apk/res/android:dataExtractionRules(0x0101063e)=@0x7f020001
+          E: activity (line=13)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)=".MainActivity" (Raw: ".MainActivity")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+              E: intent-filter (line=14)
+                  E: action (line=15)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")
+                  E: category (line=16)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")
+== res/xml/backup_rules.xml
+E: full-backup-content (line=3)
+    E: include (line=4)
+      A: domain="sharedpref" (Raw: "sharedpref")
+      A: path="." (Raw: ".")
+    E: exclude (line=5)
+      A: domain="sharedpref" (Raw: "sharedpref")
+      A: path="session.xml" (Raw: "session.xml")
+    E: include (line=6)
+      A: domain="database" (Raw: "database")
+      A: path="notes.db" (Raw: "notes.db")
+== res/xml/data_extraction_rules.xml
+E: data-extraction-rules (line=4)
+    E: cloud-backup (line=5)
+      A: disableIfNoEncryptionCapabilities=true
+        E: exclude (line=6)
+          A: domain="sharedpref" (Raw: "sharedpref")
+          A: path="session.xml" (Raw: "session.xml")
+        E: exclude (line=7)
+          A: domain="file" (Raw: "file")
+          A: path="tokens/" (Raw: "tokens/")
+    E: device-transfer (line=9)
+        E: exclude (line=10)
+          A: domain="file" (Raw: "file")
+          A: path="tokens/" (Raw: "tokens/")

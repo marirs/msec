@@ -44,6 +44,9 @@ pub struct Apk {
     /// decoded configuration or why it could not be read. Only the file the manifest names is
     /// read, as on Android.
     pub network_security_config: Option<Result<NetworkSecurityConfig, String>>,
+    /// The backup rule files the manifest names (`fullBackupContent`, `dataExtractionRules`),
+    /// each read or why it could not be.
+    pub backup_rules: Vec<Result<super::backup::BackupRules, String>>,
     /// Signatures, verified.
     pub signing: SigningReport,
     /// Every `.so` in the APK, parsed, with its hardening.
@@ -72,6 +75,7 @@ impl Apk {
             version_name: None,
             locales: Vec::new(),
             network_security_config: None,
+            backup_rules: Vec::new(),
             signing: SigningReport::read(archive),
             native_libraries: read_native_libraries(archive),
             dex_files: Vec::new(),
@@ -79,7 +83,60 @@ impl Apk {
         apk.resolve_identity();
         apk.dex_files = read_dex_files(archive, &apk.inventory.dex_files);
         apk.network_security_config = apk.read_network_security_config(archive);
+        apk.backup_rules = apk.read_backup_rules(|path| {
+            read_entry(archive, path)
+                .and_then(|bytes| xml::parse(&bytes).map_err(|error| error.to_string()))
+        });
         apk
+    }
+
+    /// The backup rule files the manifest names, by attribute, each read with `read` (which
+    /// decodes a file in the package by path). A reference that resolves to no file is an
+    /// error, like an unreadable file.
+    pub(crate) fn read_backup_rules(
+        &self,
+        mut read: impl FnMut(&str) -> Result<crate::android::xml::XmlDocument, String>,
+    ) -> Vec<Result<super::backup::BackupRules, String>> {
+        use super::backup::{BackupRules, BackupRulesSource};
+        let Some(application) = self
+            .manifest
+            .as_ref()
+            .and_then(|manifest| manifest.application.as_ref())
+        else {
+            return Vec::new();
+        };
+        [
+            (
+                BackupRulesSource::FullBackupContent,
+                &application.full_backup_content,
+            ),
+            (
+                BackupRulesSource::DataExtractionRules,
+                &application.data_extraction_rules,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(source, value)| {
+            // fullBackupContent="false" turns backup content off: no file to read.
+            let reference = value.as_ref()?.reference()?;
+            Some(self.xml_file(reference).map_or_else(
+                || Err(format!("@{reference:#010x} does not resolve to a file")),
+                |path| {
+                    read(&path).map(|document| BackupRules::from_document(source, &path, &document))
+                },
+            ))
+        })
+        .collect()
+    }
+
+    /// The file a resource reference names, in the default configuration when there is one.
+    fn xml_file(&self, reference: u32) -> Option<String> {
+        let files = self.resource_table()?.files(reference);
+        files
+            .iter()
+            .find(|(config, _)| config.is_default())
+            .or_else(|| files.first())
+            .map(|(_, path)| path.clone())
     }
 
     /// Sets the label, version name and locales from the manifest and the resource table.

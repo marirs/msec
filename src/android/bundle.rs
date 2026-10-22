@@ -553,6 +553,7 @@ fn base_view<R: Read + Seek>(
         version_name: None,
         locales: Vec::new(),
         network_security_config: None,
+        backup_rules: Vec::new(),
         signing: signing.clone(),
         native_libraries: modules
             .iter()
@@ -578,6 +579,14 @@ fn base_view<R: Read + Seek>(
             &document,
             apk.resource_table(),
         ))
+    });
+    apk.backup_rules = apk.read_backup_rules(|path| {
+        let bytes = read(archive, &format!("{BASE_MODULE}/{path}"))?;
+        match XmlFormat::detect(&bytes) {
+            Some(XmlFormat::Binary) => xml::parse(&bytes),
+            _ => xml::parse_proto(&bytes),
+        }
+        .map_err(|error| error.to_string())
     });
     apk
 }

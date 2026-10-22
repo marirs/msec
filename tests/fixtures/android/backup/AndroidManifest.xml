@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- msec's backup rules fixture (../build_backup.sh): allowBackup left at its default (true),
+     with backup rules for Android 11 and lower (fullBackupContent) and Android 12 and later
+     (dataExtractionRules). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.appchk.fixture.backup"
+    android:versionCode="1"
+    android:versionName="1.0">
+  <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>
+  <application android:label="@string/app_name"
+      android:fullBackupContent="@xml/backup_rules"
+      android:dataExtractionRules="@xml/data_extraction_rules">
+    <activity android:name=".MainActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

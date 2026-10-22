@@ -3,6 +3,7 @@
 pub mod analysis;
 pub mod api;
 mod apk;
+pub mod backup;
 pub mod bundle;
 mod chunk;
 pub mod dex;

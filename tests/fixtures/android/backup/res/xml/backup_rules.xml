@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and lower: back up shared preferences except the session, and one database. -->
+<full-backup-content>
+  <include domain="sharedpref" path="."/>
+  <exclude domain="sharedpref" path="session.xml"/>
+  <include domain="database" path="notes.db"/>
+</full-backup-content>
