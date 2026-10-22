@@ -21,7 +21,7 @@ use crate::macho::signature::{
     SLOT_RESOURCES,
 };
 use crate::macho::signer::Signer;
-use crate::macho::{MachFile, MachO, parse};
+use crate::macho::{MachFile, MachO, MachOAnomalyKind, command_name, parse};
 use crate::plist::{Plist, PlistError};
 
 /// Largest executable read: real ones run to a few hundred megabytes.
@@ -337,6 +337,21 @@ fn check(
         note: None,
     };
     let signature = match &image.signature {
+        // LC_CODE_SIGNATURE present but pointing outside the file (a truncated executable;
+        // the parser keeps no range for it and records the anomaly): signed, but the
+        // signature cannot be read, which is not the same as unsigned.
+        None if image.anomalies.iter().any(|anomaly| {
+            matches!(
+                anomaly.kind,
+                MachOAnomalyKind::LinkeditDataOutOfBounds { command }
+                    if command_name(command) == "LC_CODE_SIGNATURE"
+            )
+        }) =>
+        {
+            result.kind =
+                SignatureKind::Unreadable("LC_CODE_SIGNATURE points outside the file".to_owned());
+            return result;
+        }
         None => return result,
         Some(Err(error)) => {
             result.kind = SignatureKind::Unreadable(error.to_string());

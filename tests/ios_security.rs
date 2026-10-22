@@ -285,11 +285,20 @@ fn unread_parts_are_unchecked_not_clean() {
         keys(UncheckedCheck::Strings),
         [BinaryRule::WebViewFileOriginRelaxed.key()]
     );
-    let hardening: Vec<BinaryRule> = analyse_binaries(app)
+    // The cut framework: no hardening heuristic fires on imports that were never read, and
+    // its signature, whose LC_CODE_SIGNATURE points past the end of the file, is unreadable,
+    // not missing.
+    let library: Vec<(BinaryRule, String)> = analyse_binaries(app)
         .into_iter()
         .filter(|finding| finding.binary.ends_with("Lib.framework/Lib"))
-        .map(|finding| finding.rule)
-        .filter(|rule| matches!(rule, BinaryRule::NoStackCanary | BinaryRule::NoArc))
+        .map(|finding| (finding.rule, finding.detail))
         .collect();
-    assert_eq!(hardening, []);
+    assert_eq!(
+        library,
+        [(
+            BinaryRule::SignatureMismatch,
+            "the code signature cannot be read: LC_CODE_SIGNATURE points outside the file"
+                .to_owned()
+        )]
+    );
 }
