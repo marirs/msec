@@ -723,7 +723,7 @@ fn obfuscation_is_estimated_from_class_names() {
         "/tests/fixtures/android/code-r8.apk"
     ))
     .unwrap();
-    let mut archive = ZipArchive::open(Cursor::new(bytes), Limits::default()).unwrap();
+    let mut archive = ZipArchive::open(std::io::Cursor::new(bytes), Limits::default()).unwrap();
     let apk = Apk::read(&mut archive);
     assert_eq!(apk.dex_files.len(), 1);
     let shipped = apk.dex_optimization();
