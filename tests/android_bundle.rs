@@ -507,3 +507,30 @@ fn push_length(out: &mut Vec<u8>, mut length: usize) {
         out.push(byte | 0x80);
     }
 }
+
+/// bundle-debuggable.aab (build_bundle_debuggable.sh): the base module's protobuf manifest sets
+/// android:debuggable, as aapt2 dumps it, and the flag is read and reported like an APK's.
+#[test]
+fn a_debuggable_bundle_is_read_as_debuggable() {
+    use msec::android::analysis::ManifestRule;
+    let dump = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/android/bundle-debuggable.xmltree.txt"
+    ))
+    .unwrap();
+    assert!(dump.contains("android:debuggable(0x0101000f)=true"));
+    let bytes = include_bytes!("fixtures/android/bundle-debuggable.aab");
+    let mut archive = ZipArchive::open(Cursor::new(bytes.to_vec()), Limits::default()).unwrap();
+    let mut bundle = Bundle::read(&mut archive);
+    let base = bundle.base.take().unwrap();
+    let manifest = base.manifest.as_ref().unwrap();
+    assert_eq!(
+        manifest.application.as_ref().and_then(|app| app.debuggable),
+        Some(true)
+    );
+    assert!(
+        base.manifest_findings()
+            .iter()
+            .any(|finding| finding.rule == ManifestRule::AppIsDebuggable)
+    );
+}

@@ -483,3 +483,78 @@ fn overlapping_attribute_declarations_stay_within_the_budget() {
     );
     assert!(!XmlAnomalyKind::AttributeLimitReached.rejected_by_android());
 }
+
+/// `<manifest package="p"><application .../></manifest>` with the given application attributes.
+fn manifest_with_application(
+    mut writer: AxmlWriter,
+    application: impl FnOnce(&mut AxmlWriter) -> Vec<Attribute>,
+) -> Vec<u8> {
+    writer.start_namespace();
+    let package_name = writer.string("package");
+    let package_value = writer.string("com.example.trick");
+    writer.start(
+        "manifest",
+        &[Attribute {
+            namespace: None,
+            name: package_name,
+            data_type: TYPE_STRING,
+            data: package_value,
+        }],
+    );
+    let attributes = application(&mut writer);
+    writer.start("application", &attributes);
+    writer.end("application");
+    writer.end("manifest");
+    writer.finish()
+}
+
+/// AT-RUL-004 (APPCHK's AC-ANDROID-0001, msec's app_is_debuggable): the flag is the attribute
+/// with android:debuggable's resource ID, whatever its name string says, as Android reads it.
+#[test]
+fn debuggable_is_read_by_resource_id_like_android() {
+    use msec::android::analysis::{ManifestRule, analyse_manifest};
+    const DEBUGGABLE: u32 = 0x0101_000f;
+    const TYPE_INT_BOOLEAN: u8 = 0x12;
+    let flag = |bytes: &[u8]| -> (Option<bool>, bool) {
+        let document = xml::parse(bytes).unwrap();
+        let manifest = Manifest::from_document(&document);
+        let reported = analyse_manifest(&manifest, None)
+            .iter()
+            .any(|finding| finding.rule == ManifestRule::AppIsDebuggable);
+        (
+            manifest.application.as_ref().and_then(|app| app.debuggable),
+            reported,
+        )
+    };
+    let boolean = |value: bool| if value { u32::MAX } else { 0 };
+    let with = |name: &str, value: bool| {
+        manifest_with_application(AxmlWriter::new(&[(name, DEBUGGABLE)]), |writer| {
+            let namespace = writer.string(ANDROID_NAMESPACE);
+            vec![Attribute {
+                namespace: Some(namespace),
+                name: 0,
+                data_type: TYPE_INT_BOOLEAN,
+                data: boolean(value),
+            }]
+        })
+    };
+    // true fails, false passes, absent passes.
+    assert_eq!(flag(&with("debuggable", true)), (Some(true), true));
+    assert_eq!(flag(&with("debuggable", false)), (Some(false), false));
+    let absent = manifest_with_application(AxmlWriter::new(&[]), |_| Vec::new());
+    assert_eq!(flag(&absent), (None, false));
+    // A blanked name string, the resource ID kept: Android still reads the flag.
+    assert_eq!(flag(&with("", true)), (Some(true), true));
+    // "debuggable" in the android namespace without the resource ID: Android ignores it.
+    let unmapped = manifest_with_application(AxmlWriter::new(&[]), |writer| {
+        let namespace = writer.string(ANDROID_NAMESPACE);
+        let name = writer.string("debuggable");
+        vec![Attribute {
+            namespace: Some(namespace),
+            name,
+            data_type: TYPE_INT_BOOLEAN,
+            data: boolean(true),
+        }]
+    });
+    assert_eq!(flag(&unmapped), (None, false));
+}
