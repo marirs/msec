@@ -168,7 +168,7 @@ pub struct BundleComponent {
 pub enum ComponentKind {
     /// `Frameworks/<name>.framework/`.
     Framework,
-    /// `Frameworks/<name>.dylib`.
+    /// A loose `.dylib` outside the nested bundles (usually `Frameworks/<name>.dylib`).
     Library,
     /// `PlugIns/<name>.appex/`.
     AppExtension,
@@ -350,18 +350,19 @@ fn read_app_bundle<R: Read + Seek>(
             archive,
             executable,
             BinaryRole::MainExecutable,
-            &path,
+            Some(&path),
         ));
     }
     for component in &components {
         let Some(executable) = &component.executable else {
             continue;
         };
-        // A loose library is sealed by the app; a bundle by its own Info.plist and resources.
+        // A loose library seals its own embedded Info.plist, if any (the app's CodeResources
+        // names it as nested code); a bundle seals its Info.plist and resources.
         let bundle = if component.kind == ComponentKind::Library {
-            path.as_str()
+            None
         } else {
-            component.path.as_str()
+            Some(component.path.as_str())
         };
         binaries.push(read_binary(
             archive,
@@ -533,10 +534,7 @@ fn components<R: Read + Seek>(
                 found.insert((kind, format!("{path}{directory}{name}/")));
             }
         }
-        if let Some(library) = relative.strip_prefix("Frameworks/")
-            && !library.contains('/')
-            && library.ends_with(".dylib")
-        {
+        if is_loose_library(relative) {
             found.insert((ComponentKind::Library, format!("{path}{relative}")));
         }
     }
@@ -544,6 +542,21 @@ fn components<R: Read + Seek>(
         .into_iter()
         .map(|(kind, component)| read_component(archive, kind, component))
         .collect()
+}
+
+/// A `.dylib` anywhere in the app outside its nested bundles (frameworks, extensions, nested
+/// apps), whose own executables are read as components: usually `Frameworks/<name>.dylib`,
+/// and at the bundle root where Xcode copies `libswiftRemoteMirror.dylib`.
+fn is_loose_library(relative: &str) -> bool {
+    const NESTED_BUNDLES: [&str; 3] = [".framework", ".appex", ".app"];
+    let (directories, name) = relative.rsplit_once('/').unwrap_or(("", relative));
+    name.len() > ".dylib".len()
+        && name.ends_with(".dylib")
+        && !directories.split('/').any(|directory| {
+            NESTED_BUNDLES
+                .iter()
+                .any(|suffix| directory.ends_with(suffix))
+        })
 }
 
 fn read_component<R: Read + Seek>(

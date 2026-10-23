@@ -7,7 +7,8 @@
 //! archive in place, prefers `Payload/<name>.app/` at the archive root as the App Store expects
 //! it and records any other layout as an [`IpaProblem`], and reads plists the way iOS does
 //! ([`crate::plist`]). Every bundle's executable is read as Mach-O ([`crate::macho`]) and its
-//! code signature checked against the bundle's files ([`BundleBinary`]); see
+//! code signature checked against the bundle's files, or a loose library's against itself
+//! ([`BundleBinary`], [`Sealing`]); see
 //! `docs/PORTING.md`.
 
 pub mod analysis;
@@ -24,7 +25,7 @@ pub mod required_reason;
 pub mod store_leads;
 pub mod upload_requirements;
 
-pub use binaries::{BinaryRole, BundleBinary, SignatureCheck, SignatureKind};
+pub use binaries::{BinaryRole, BundleBinary, Sealing, SignatureCheck, SignatureKind};
 
 /// The associated domains the main executable's entitlements list
 /// (`com.apple.developer.associated-domains`: `applinks:example.com`, `webcredentials:...`), as

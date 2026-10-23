@@ -647,11 +647,12 @@ fn exercise(bytes: &[u8]) {
 #[test]
 fn binary_checks_follow_the_build() {
     use msec::ios::analysis::{BinaryRule, analyse_binary};
-    use msec::ios::{BinaryRole, BundleBinary};
+    use msec::ios::{BinaryRole, BundleBinary, Sealing};
 
     let all_rules = |name: &str| -> Vec<BinaryRule> {
         let bytes = read(&format!("bin/{name}"));
-        let binary = BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, None, None);
+        let binary =
+            BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, Sealing::Itself);
         let mut rules: Vec<BinaryRule> = analyse_binary(&binary)
             .into_iter()
             .map(|finding| finding.rule)

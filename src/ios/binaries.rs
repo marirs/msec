@@ -111,10 +111,11 @@ pub struct SignatureCheck {
     pub pages: Option<bool>,
     /// Pages whose hash differs (first 32).
     pub mismatched_pages: Vec<usize>,
-    /// The bundle's `Info.plist` matches its slot; `None` when the slot is empty or there is
-    /// no such file.
+    /// The sealed `Info.plist` (the bundle's, or a loose binary's embedded one: [`Sealing`])
+    /// matches its slot; `None` when the slot is empty or there is no such plist.
     pub info_plist: Option<bool>,
-    /// The bundle's `_CodeSignature/CodeResources` matches its slot; `None` likewise.
+    /// The bundle's `_CodeSignature/CodeResources` matches its slot; `None` likewise, and for a
+    /// binary sealed on its own.
     pub resources: Option<bool>,
     /// The signature's own requirements and entitlements match their slots; `None` when none
     /// is sealed.
@@ -149,13 +150,32 @@ pub enum SignatureKind {
     Certificate,
 }
 
+/// What a binary's signature seals besides its code (special slots 1 and 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sealing<'a> {
+    /// The executable of a bundle: the bundle's `Info.plist` and
+    /// `_CodeSignature/CodeResources`, when the bundle has them.
+    Bundle {
+        /// The bundle's `Info.plist`.
+        info_plist: Option<&'a [u8]>,
+        /// The bundle's `_CodeSignature/CodeResources`.
+        resources: Option<&'a [u8]>,
+    },
+    /// A binary sealed on its own (a loose library, a lone file): the Info.plist embedded in its
+    /// `__TEXT,__info_plist` section, as codesign reads it, and no resources. Apple's Swift
+    /// runtime libraries bind such an Info.plist; checking them against the app's would report
+    /// every one as changed after signing.
+    Itself,
+}
+
 /// Reads one executable and checks each slice's signature against the bundle at `bundle`
-/// (directory with a trailing slash).
+/// (directory with a trailing slash), or against itself when `bundle` is `None` (a loose
+/// library).
 pub(super) fn read_binary<R: Read + Seek>(
     archive: &mut ZipArchive<R>,
     path: &str,
     role: BinaryRole,
-    bundle: &str,
+    bundle: Option<&str>,
 ) -> BundleBinary {
     let mut binary = BundleBinary {
         path: path.to_owned(),
@@ -187,6 +207,9 @@ pub(super) fn read_binary<R: Read + Seek>(
             return binary;
         }
     };
+    let Some(bundle) = bundle else {
+        return BundleBinary::from_bytes(path, role, &bytes, Sealing::Itself);
+    };
     let info_plist = archive
         .read_by_name(&format!("{bundle}Info.plist"))
         .ok()
@@ -195,25 +218,17 @@ pub(super) fn read_binary<R: Read + Seek>(
         .read_by_name(&format!("{bundle}_CodeSignature/CodeResources"))
         .ok()
         .flatten();
-    BundleBinary::from_bytes(
-        path,
-        role,
-        &bytes,
-        info_plist.as_deref(),
-        resources.as_deref(),
-    )
+    let sealing = Sealing::Bundle {
+        info_plist: info_plist.as_deref(),
+        resources: resources.as_deref(),
+    };
+    BundleBinary::from_bytes(path, role, &bytes, sealing)
 }
 
 impl BundleBinary {
-    /// Reads an executable from its bytes, checking each slice's signature against the
-    /// bundle's `Info.plist` and `CodeResources` when given (`None` for a lone binary).
-    pub fn from_bytes(
-        path: &str,
-        role: BinaryRole,
-        bytes: &[u8],
-        info_plist: Option<&[u8]>,
-        resources: Option<&[u8]>,
-    ) -> Self {
+    /// Reads an executable from its bytes, checking each slice's signature against what
+    /// seals it (`sealing`).
+    pub fn from_bytes(path: &str, role: BinaryRole, bytes: &[u8], sealing: Sealing<'_>) -> Self {
         let mut binary = BundleBinary {
             path: path.to_owned(),
             role,
@@ -241,13 +256,9 @@ impl BundleBinary {
             };
             let start = slice.offset as usize;
             let slice_bytes = &bytes[start..start + slice.size as usize];
-            binary.signatures.push(check(
-                slice.architecture(),
-                image,
-                slice_bytes,
-                info_plist,
-                resources,
-            ));
+            binary
+                .signatures
+                .push(check(slice.architecture(), image, slice_bytes, sealing));
             for name in ENCRYPTABLE_SECTIONS {
                 if text_sections(image, name).any(|section| image.section_encrypted(section)) {
                     binary.encrypted_sections.push(name.to_owned());
@@ -346,8 +357,7 @@ fn check(
     architecture: String,
     image: &MachO,
     bytes: &[u8],
-    info_plist: Option<&[u8]>,
-    resources: Option<&[u8]>,
+    sealing: Sealing<'_>,
 ) -> SignatureCheck {
     let mut result = SignatureCheck {
         architecture,
@@ -424,9 +434,17 @@ fn check(
             result.note = Some(problem.to_owned());
         }
     }
+    let (info_plist, resources) = match sealing {
+        Sealing::Bundle {
+            info_plist,
+            resources,
+        } => (info_plist, resources),
+        Sealing::Itself => (section(image, bytes, "__info_plist"), None),
+    };
     result.info_plist =
-        info_plist.and_then(|bytes| directory.verify_special(SLOT_INFO_PLIST, bytes));
-    result.resources = resources.and_then(|bytes| directory.verify_special(SLOT_RESOURCES, bytes));
+        info_plist.and_then(|plist| directory.verify_special(SLOT_INFO_PLIST, plist));
+    result.resources =
+        resources.and_then(|sealed| directory.verify_special(SLOT_RESOURCES, sealed));
     result.embedded_blobs = embedded_blobs(signature);
     result
 }

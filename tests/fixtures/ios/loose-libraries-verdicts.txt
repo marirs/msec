@@ -1,0 +1,8 @@
+Frameworks/libplist.dylib:
+  verify: Frameworks/libplist.dylib: valid on disk
+  verify: Frameworks/libplist.dylib: satisfies its Designated Requirement
+  Info.plist entries=3
+libroot.dylib:
+  verify: libroot.dylib: valid on disk
+  verify: libroot.dylib: satisfies its Designated Requirement
+  Info.plist=not bound

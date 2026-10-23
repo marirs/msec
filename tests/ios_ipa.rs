@@ -351,6 +351,66 @@ fn signature_checks_match_codesign() {
     assert_eq!(check.mismatched_pages, [1]);
 }
 
+/// Loose libraries as Xcode leaves them in Swift apps (build_loose_libraries.sh): one carries
+/// its own Info.plist in a `__TEXT,__info_plist` section, which its signature binds, and one sits
+/// at the bundle root. codesign verifies both (loose-libraries-verdicts.txt). msec reads both,
+/// and checks the bound Info.plist against the library's own section, not the app's.
+#[test]
+fn loose_libraries_are_read_and_seal_their_own_info_plist() {
+    use msec::ios::analysis::{BinaryRule, analyse_binaries};
+
+    let verdicts = fixture_file("loose-libraries-verdicts.txt");
+    for expected in [
+        "  verify: Frameworks/libplist.dylib: valid on disk",
+        "  Info.plist entries=3",
+        "  verify: libroot.dylib: valid on disk",
+        "  Info.plist=not bound",
+    ] {
+        assert!(verdicts.lines().any(|line| line == expected), "{expected}");
+    }
+    let app = read_ipa("loose-libraries.ipa").app.unwrap();
+    let libraries: Vec<&str> = app
+        .binaries
+        .iter()
+        .filter(|binary| binary.role == BinaryRole::Component(ComponentKind::Library))
+        .map(|binary| binary.path.as_str())
+        .collect();
+    assert_eq!(
+        libraries,
+        [
+            "Payload/Fixture.app/Frameworks/libextra.dylib",
+            "Payload/Fixture.app/Frameworks/libplist.dylib",
+            "Payload/Fixture.app/libroot.dylib",
+        ]
+    );
+    let check = |path: &str| {
+        app.binaries
+            .iter()
+            .find(|binary| binary.path == path)
+            .unwrap()
+            .signatures[0]
+            .clone()
+    };
+    let bound = check("Payload/Fixture.app/Frameworks/libplist.dylib");
+    assert_eq!((bound.info_plist, bound.resources), (Some(true), None));
+    assert!(bound.valid(), "{bound:?}");
+    let root = check("Payload/Fixture.app/libroot.dylib");
+    assert_eq!((root.info_plist, root.resources), (None, None));
+    assert!(root.valid(), "{root:?}");
+    let findings = analyse_binaries(&app);
+    assert!(
+        !findings
+            .iter()
+            .any(|finding| finding.rule == BinaryRule::SignatureMismatch),
+        "{findings:?}"
+    );
+    // The root library is analysed like the others: no stack buffers, so no protector calls.
+    assert!(findings.iter().any(|finding| {
+        finding.rule == BinaryRule::NoStackCanary
+            && finding.binary == "Payload/Fixture.app/libroot.dylib"
+    }));
+}
+
 /// The checks on the fixture's executables: the development entitlement, MobSF's
 /// stack-protector heuristic on the C components that have no stack buffers, and the main
 /// executable's NSLog; changes after signing are caught.

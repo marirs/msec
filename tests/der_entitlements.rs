@@ -138,10 +138,11 @@ fn ipa_fixtures_agree() {
 #[test]
 fn the_analysis_reports_differing_entitlements() {
     use msec::ios::analysis::{BinaryRule, analyse_binary};
-    use msec::ios::{BinaryRole, BundleBinary};
+    use msec::ios::{BinaryRole, BundleBinary, Sealing};
     let findings = |name: &str| {
         let bytes = std::fs::read(Path::new(MACHO).join("der").join(name)).unwrap();
-        let binary = BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, None, None);
+        let binary =
+            BundleBinary::from_bytes(name, BinaryRole::MainExecutable, &bytes, Sealing::Itself);
         analyse_binary(&binary)
             .into_iter()
             .filter(|finding| finding.rule == BinaryRule::EntitlementsDiffer)
