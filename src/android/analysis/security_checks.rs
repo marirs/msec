@@ -27,8 +27,6 @@ use crate::android::api::{AppClasses, framework_superclass};
 use crate::android::dex::{Constant, DexEntry, DexFile, Target};
 use crate::android::manifest::Manifest;
 
-/// Calling methods listed per finding; the rest are counted.
-const MAX_CALLERS: usize = 20;
 /// Superclass chains followed at most this far.
 const MAX_HIERARCHY_DEPTH: usize = 64;
 
@@ -385,9 +383,9 @@ fn finding(
     CodeFinding {
         rule,
         api: Some(api.to_owned()),
+        // Every caller here; `code_checks::analyse_code` keeps those the finding lists.
         callers: callers
             .iter()
-            .take(MAX_CALLERS)
             .map(|method| Caller {
                 method: method.clone(),
                 checks_version: false,

@@ -564,10 +564,29 @@ pub fn analyse_code(
         manifest,
         &calls.direct,
     ));
+    let app_prefix = manifest
+        .package
+        .as_deref()
+        .map(|package| format!("L{}/", package.replace('.', "/")));
+    for finding in &mut findings {
+        keep_listed_callers(&mut finding.callers, app_prefix.as_deref());
+    }
     findings.sort_by(|left, right| {
         (left.rule, &left.api, &left.argument).cmp(&(right.rule, &right.api, &right.argument))
     });
     findings
+}
+
+/// Keeps the callers a finding lists: the app's own methods (under its package, `app_prefix` in
+/// DEX notation) first, then the others, each group in its existing order, at most
+/// [`MAX_CALLERS`] (`caller_count` keeps the total). Libraries often call an API far more often
+/// than the app does; listed first, they would push the app's own calls past the cap.
+fn keep_listed_callers(callers: &mut Vec<Caller>, app_prefix: Option<&str>) {
+    let outside_app =
+        |caller: &Caller| !app_prefix.is_some_and(|prefix| caller.method.starts_with(prefix));
+    // A stable sort: within each group the callers keep their order.
+    callers.sort_by_key(outside_app);
+    callers.truncate(MAX_CALLERS);
 }
 
 /// A removed API: which rule, by whether every calling method reads the Android version, and
@@ -724,9 +743,9 @@ impl ReferenceIndex {
         CodeFinding {
             rule,
             api: api.map(str::to_owned),
+            // Every caller here; `keep_listed_callers` keeps those the finding lists.
             callers: callers
                 .iter()
-                .take(MAX_CALLERS)
                 .map(|method| Caller {
                     method: method.clone(),
                     checks_version: checks_version(method),
@@ -795,7 +814,48 @@ pub(super) fn app_classes(files: &[&DexFile]) -> AppClasses {
 mod tests {
     use std::collections::{BTreeSet, HashMap};
 
-    use super::{looks_obfuscated, sign_in_without_restoration};
+    use super::{
+        Caller, MAX_CALLERS, keep_listed_callers, looks_obfuscated, sign_in_without_restoration,
+    };
+
+    /// The app's own callers are listed before library callers, so the cap never hides them
+    /// behind libraries that call the same API more often (OVAA's LoginActivity call to Log.d
+    /// was past the cap among 59 callers before).
+    #[test]
+    fn the_apps_own_callers_are_listed_first() {
+        let caller = |method: String| Caller {
+            method,
+            checks_version: false,
+        };
+        let mut callers: Vec<Caller> = (0..30)
+            .map(|index| caller(format!("Landroidx/lib/C{index:02};->run()V")))
+            .chain([
+                caller("Lcom/app/Login;->submit()V".to_owned()),
+                caller("Lcom/app/Main;->onCreate()V".to_owned()),
+            ])
+            .collect();
+        keep_listed_callers(&mut callers, Some("Lcom/app/"));
+        let listed: Vec<&str> = callers
+            .iter()
+            .map(|caller| caller.method.as_str())
+            .collect();
+        assert_eq!(listed.len(), MAX_CALLERS);
+        assert_eq!(
+            listed[..3],
+            [
+                "Lcom/app/Login;->submit()V",
+                "Lcom/app/Main;->onCreate()V",
+                "Landroidx/lib/C00;->run()V"
+            ]
+        );
+        // Without a package, the order is kept.
+        let mut unknown = vec![
+            caller("Lb;->x()V".to_owned()),
+            caller("La;->x()V".to_owned()),
+        ];
+        keep_listed_callers(&mut unknown, None);
+        assert_eq!(unknown[0].method, "Lb;->x()V");
+    }
 
     /// Sign-in counts from app code, not from the SDK calling itself, and a Restore Credentials
     /// or Block Store reference anywhere satisfies the requirement.
