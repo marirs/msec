@@ -433,6 +433,54 @@ fn resource_table_mutations_never_panic() {
     }
 }
 
+/// Found by the CI fuzz run on `be52f5c` (run 39436090138, an `apk` input whose package chunk
+/// declared `typeIdOffset` 0xFFFFFFFF): type IDs are matched to names by subtracting
+/// `typeIdOffset + 1`, which overflowed. A package whose offset leaves no type ID (1 to 255) now
+/// has no type names, so every lookup by type name finds nothing.
+#[test]
+fn a_type_id_offset_at_the_end_of_the_range_does_not_overflow() {
+    let original = fixture_entry("resources.arsc");
+    let package = package_chunk(&original);
+    let type_id_offset = package + 284;
+    for offset in [u32::MAX, u32::MAX - 1, 0x100, 0xff] {
+        let mut mutated = original.clone();
+        mutated[type_id_offset..type_id_offset + 4].copy_from_slice(&offset.to_le_bytes());
+        let table = ResourceTable::parse(mutated).unwrap();
+        // No type ID (1 to 255) lies past such an offset, so no type has a name.
+        assert_eq!(table.locales(), Vec::<String>::new(), "{offset:#x}");
+        assert_eq!(table.find("string", "app_name"), None, "{offset:#x}");
+        assert!(table.ids_of_type("string").is_empty(), "{offset:#x}");
+        assert_eq!(table.name(0x7f03_0000), None, "{offset:#x}");
+    }
+    // The fixture's own offset (0) still names its types.
+    assert!(
+        ResourceTable::parse(original)
+            .unwrap()
+            .find("string", "app_name")
+            .is_some()
+    );
+}
+
+/// The offset of the first package chunk (type 0x0200) in a resource table, whose header the
+/// fixture writes at its full 288 bytes (so `typeIdOffset`, at 284, is present).
+fn package_chunk(table: &[u8]) -> usize {
+    let u16_at = |at: usize| u16::from_le_bytes([table[at], table[at + 1]]);
+    let u32_at = |at: usize| u32::from_le_bytes(table[at..at + 4].try_into().unwrap());
+    let mut position = usize::from(u16_at(2));
+    while position < table.len() {
+        if u16_at(position) == 0x0200 {
+            assert_eq!(
+                u16_at(position + 2),
+                288,
+                "the fixture's package header size"
+            );
+            return position;
+        }
+        position += u32_at(position + 4) as usize;
+    }
+    panic!("no package chunk");
+}
+
 /// Found by fuzzing: start elements declaring 65,535 overlapping zero-size attributes made a
 /// 64 KB document cost over a gigabyte. A document yields at most as many attributes as it has
 /// room for without overlap; the rest are skipped and reported once.

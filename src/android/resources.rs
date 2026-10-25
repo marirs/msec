@@ -627,7 +627,10 @@ impl ArscTable {
     }
 
     fn type_name(&self, package: &Package, type_id: u8) -> Option<String> {
-        let index = u32::from(type_id).checked_sub(1 + package.type_id_offset)?;
+        // Type IDs count from typeIdOffset + 1. A crafted offset of 0xFFFFFFFF leaves no type ID
+        // with a name rather than overflowing (found by fuzzing on be52f5c).
+        let first_type_id = package.type_id_offset.checked_add(1)?;
+        let index = u32::from(type_id).checked_sub(first_type_id)?;
         package.type_names.get(&self.bytes, index)
     }
 
