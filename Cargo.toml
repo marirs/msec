@@ -1,6 +1,6 @@
 [package]
 name = "msec"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Mobile app security analysis core for Android and iOS packages: a Rust port of the MobSF analysis engine (early development)"
